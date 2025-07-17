@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es-NI">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Liquidación Laboral</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Calculadora de Liquidación Laboral</h1>
+        <p class="subtitle">Comprobante de liquidación.</p>
+        
+        <form id="liquidacionForm">
+            <fieldset>
+                <legend>Datos de la Empresa</legend>
+                 <div class="form-group">
+                    <label for="nombreEmpresa">Nombre de la Empresa o Empleador:</label>
+                    <input type="text" id="nombreEmpresa" required placeholder="Ej: Mi Empresa S.A.">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Datos del Empleado y Contrato</legend>
+                <div class="form-grid">
+                    <div class="form-group"><label for="nombreEmpleado">Nombre del Empleado:</label><input type="text" id="nombreEmpleado" required placeholder="Ej: Juan José Pérez López"></div>
+                    <div class="form-group"><label for="cedula">Cédula de Identidad:</label><input type="text" id="cedula" required placeholder="Ej: 001-123456-0001A"></div>
+                    <div class="form-group"><label for="puesto">Puesto (Cargo Desempeñado):</label><select id="puesto" required><option value="">-- Seleccione un puesto --</option><optgroup label="Administrativos y Gerenciales"><option>Gerente General</option><option>Gerente de Operaciones</option><option>Gerente Financiero</option><option>Gerente de RRHH</option><option>Contador General</option><option>Asistente Contable</option><option>Asistente Administrativo</option><option>Recepcionista</option><option>Jefe de Compras</option><option>Responsable de Tienda</option></optgroup><optgroup label="Técnicos y Operativos"><option>Técnico de Soporte IT</option><option>Desarrollador de Software</option><option>Diseñador Gráfico</option><option>Supervisor de Producción</option><option>Operario de Maquinaria</option><option>Bodeguero</option><option>Conductor</option><option>Conserje</option><option>Guarda de Seguridad</option></optgroup><optgroup label="Ventas y Marketing"><option>Gerente de Ventas</option><option>Ejecutivo de Ventas</option><option>Especialista en Marketing Digital</option><option>Promotor</option><option>Atención al Cliente</option></optgroup></select></div>
+                    <div class="form-group"><label for="tipoContrato">Tipo de Contrato:</label><select id="tipoContrato" required><option value="Tiempo Indeterminado">Por Tiempo Indeterminado</option><option value="Tiempo Determinado">Por Tiempo Determinado</option><option value="Obra o Servicio Determinado">Por Obra o Servicio Determinado</option></select></div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Fechas y Salario</legend>
+                 <div class="form-grid">
+                    <div class="form-group"><label for="fechaIngreso">Fecha de Ingreso:</label><input type="date" id="fechaIngreso" required></div>
+                    <div class="form-group"><label for="fechaSalida">Fecha de Salida:</label><input type="date" id="fechaSalida" required></div>
+                    <div class="form-group"><label for="salarioMensual">Salario Ordinario Mensual (C$):</label><input type="number" id="salarioMensual" required min="0" step="0.01" placeholder="Ej: 8000.00"></div>
+                    <div class="form-group"><label for="tipoSalario">Tipo de Salario:</label><select id="tipoSalario" required><option value="Fijo">Fijo</option><option value="Variable">Variable</option></select></div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Motivo de Retiro y Acumulados</legend>
+                 <div class="form-grid-3-col">
+                    <div class="form-group"><label for="motivoRetiro">Motivo de Retiro:</label><select id="motivoRetiro" required><option value="">-- Seleccione un motivo --</option><option value="renuncia_con_preaviso">Renuncia Voluntaria (con preaviso)</option><option value="renuncia_sin_preaviso">Renuncia Inmediata / Abandono</option><option value="despido_justificado">Despido con Causa Justa (Art. 48 CT)</option><option value="despido_injustificado">Despido sin Causa Justa (Art. 45 CT)</option><option value="mutuo_acuerdo">Mutuo Acuerdo</option><option value="fin_contrato">Finalización de Contrato Determinado</option><option value="fuerza_mayor">Causas de Fuerza Mayor</option></select></div>
+                    <div class="form-group"><label for="fechaInicioSueldoPendiente">Fecha Inicio Sueldo Pendiente:</label><input type="date" id="fechaInicioSueldoPendiente" title="Fecha de inicio del último período de pago no liquidado."></div>
+                    <div class="form-group"><label for="sueldoPendienteDias">Días de Sueldo Pendiente:</label><input type="number" id="sueldoPendienteDias" required min="0" step="1" value="0" title="Días trabajados en el último período que no han sido pagados."></div>
+                    <!-- CORRECCIÓN: Se cambió el campo de vacaciones -->
+                    <div class="form-group">
+                        <label for="vacacionesPendientes">Días de Vacaciones Pendientes de Gozar:</label>
+                        <input type="number" id="vacacionesPendientes" required min="0" step="0.01" value="0" title="Total de días de vacaciones que el empleado tiene acumulados y no ha gozado.">
+                    </div>
+                 </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Deducciones</legend>
+                 <div class="form-grid-deducciones">
+                    <div class="deduction-toggle"><label>Aplicar Deducción INSS Laboral (7%)</label><label class="switch"><input type="checkbox" id="aplicarINSS"><span class="slider round"></span></label></div>
+                    <div class="deduction-toggle"><label>Aplicar Deducción IR</label><label class="switch"><input type="checkbox" id="aplicarIR"><span class="slider round"></span></label></div>
+                    <div class="form-group"><label for="deduccionInventario">Faltante de Inventario (C$):</label><input type="number" id="deduccionInventario" min="0" step="0.01" value="0"></div>
+                    <div class="form-group"><label for="otrasDeducciones">Otras Deducciones (C$):</label><input type="number" id="otrasDeducciones" min="0" step="0.01" value="0"></div>
+                 </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Responsables de Elaboración</legend>
+                 <div class="form-grid">
+                    <div class="form-group"><label for="elaboradoPor">Elaborado Por:</label><input type="text" id="elaboradoPor" required placeholder="Nombre completo"></div>
+                    <div class="form-group"><label for="revisadoPor">Revisado Por:</label><input type="text" id="revisadoPor" required placeholder="Nombre completo"></div>
+                    <div class="form-group"><label for="autorizadoPor">Autorizado Por:</label><input type="text" id="autorizadoPor" required placeholder="Nombre completo"></div>
+                    <div class="form-group"><label for="fechaElaboracion">Fecha de Elaboración:</label><input type="date" id="fechaElaboracion" required></div>
+                 </div>
+            </fieldset>
+
+            <div class="form-actions">
+                 <button type="submit" class="btn-calcular">Calcular Liquidación</button>
+                 <button type="reset" class="btn-limpiar">Limpiar Formulario</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="modal" class="modal"><div class="modal-content"><span class="close-button">×</span><div id="pdf-content"></div><button id="btnGenerarPDF" class="btn-pdf">Generar PDF</button></div></div>
+    <script src="script.js"></script>
+</body>
+</html>

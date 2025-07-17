@@ -1,0 +1,73 @@
+/* --- Estilos Generales y del Formulario (sin cambios) --- */
+:root { --primary-color: #005A9C; --secondary-color: #00AEEF; --text-color: #333; --bg-color: #f4f7f9; --border-color: #ddd; --success-color: #28a745; }
+body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; line-height: 1.6; }
+.container { max-width: 900px; margin: 20px auto; padding: 30px; background-color: #fff; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
+h1 { color: var(--primary-color); text-align: center; margin-bottom: 10px; }
+.subtitle { text-align: center; color: #666; margin-top: 0; margin-bottom: 30px; }
+fieldset { border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 25px; }
+legend { color: var(--primary-color); font-weight: 600; padding: 0 10px; }
+.form-grid, .form-grid-deducciones, .form-grid-3-col { display: grid; gap: 20px; }
+.form-grid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.form-grid-3-col { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.form-grid-deducciones { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.form-group { display: flex; flex-direction: column; }
+label { margin-bottom: 8px; font-weight: 400; font-size: 0.9em; }
+input[type="text"], input[type="number"], input[type="date"], select { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; font-family: 'Poppins', sans-serif; font-size: 1em; box-sizing: border-box; transition: border-color 0.3s, box-shadow 0.3s; }
+input:focus, select:focus { outline: none; border-color: var(--secondary-color); box-shadow: 0 0 5px rgba(0, 174, 239, 0.3); }
+.form-actions { text-align: center; margin-top: 20px; }
+.btn-calcular, .btn-limpiar, .btn-pdf { padding: 12px 25px; border: none; border-radius: 5px; color: #fff; font-size: 1em; font-weight: 600; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }
+.btn-calcular { background-color: var(--primary-color); }
+.btn-calcular:hover { background-color: #004a80; transform: translateY(-2px); }
+.btn-limpiar { background-color: #6c757d; }
+.btn-limpiar:hover { background-color: #5a6268; transform: translateY(-2px); }
+.btn-pdf { background-color: var(--success-color); display: block; width: 250px; margin: 20px auto 0; text-align: center; }
+.btn-pdf:hover { background-color: #218838; transform: translateY(-2px); }
+.deduction-toggle { display: flex; align-items: center; justify-content: space-between; background-color: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid var(--border-color); }
+.switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+.slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+input:checked + .slider { background-color: var(--secondary-color); }
+input:checked + .slider:before { transform: translateX(22px); }
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); }
+.modal-content { background-color: #fefefe; margin: 5% auto; padding: 30px; border: 1px solid #888; width: 95%; max-width: 850px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); position: relative; }
+.close-button { color: #aaa; position: absolute; top: 15px; right: 25px; font-size: 28px; font-weight: bold; }
+.close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+
+/* --- Estilos para el PDF / Comprobante --- */
+#pdf-content { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; box-sizing: border-box; }
+.pdf-header { text-align: center; margin-bottom: 20px; }
+.pdf-header h2 { margin: 0; font-size: 14pt; }
+.pdf-header p { margin: 0; font-size: 12pt; }
+.info-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+.info-table td { padding: 3px 5px; }
+.info-table .label { font-weight: bold; width: 35%; }
+.info-table .value { width: 65%; }
+.info-table .sub-value { display: inline-block; margin-left: 20px; }
+.prestaciones-table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: center; }
+.prestaciones-table th, .prestaciones-table td { border: 1px solid #000; padding: 4px; vertical-align: middle; }
+.prestaciones-table th { font-weight: bold; background-color: #f2f2f2; }
+.prestaciones-table .concepto { text-align: left; }
+.prestaciones-table .monto { text-align: right; }
+.prestaciones-table .sub-header { font-size: 9pt; font-weight: normal; }
+
+/* CORRECCIÓN: Se reemplaza 'grid' por estilos para una tabla de totales */
+.totales-table { width: 100%; margin-top: 15px; margin-bottom: 15px; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 0;}
+.totales-table td { padding: 2px 0; }
+.totales-table .label { font-weight: bold; text-align: left; }
+.totales-table .value { font-weight: bold; text-align: right; }
+.totales-table .highlight { background-color: #FFFF00; padding: 2px 5px; }
+
+/* CORRECCIÓN: Se reemplaza 'flex' por estilos para una tabla de cantidad en letras */
+.letras-table { width: 100%; margin-bottom: 15px; }
+.letras-table .label { font-weight: bold; white-space: nowrap; padding-right: 10px; width: 1%; }
+.letras-table .value { border-bottom: 1px solid #000; }
+
+.texto-finiquito { font-size: 9pt; margin-bottom: 20px; text-align: justify;}
+.firmas-table { width: 100%; border-collapse: separate; border-spacing: 60px 30px; margin-top: 10px; }
+.firmas-table td { vertical-align: bottom; }
+.firma-block { border-top: 1px solid #000; padding-top: 5px; }
+.firma-block .label { font-weight: bold; }
+.firma-block .name { min-height: 20px; }
