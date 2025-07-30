@@ -47,14 +47,19 @@
 
             <fieldset>
                 <legend>Motivo de Retiro y Acumulados</legend>
-                 <div class="form-grid-3-col">
+                 <!-- Se usa una clase de grid más flexible para acomodar el nuevo campo -->
+                 <div class="form-grid-deducciones">
                     <div class="form-group"><label for="motivoRetiro">Motivo de Retiro:</label><select id="motivoRetiro" required><option value="">-- Seleccione un motivo --</option><option value="renuncia_con_preaviso">Renuncia Voluntaria (con preaviso)</option><option value="renuncia_sin_preaviso">Renuncia Inmediata / Abandono</option><option value="despido_justificado">Despido con Causa Justa (Art. 48 CT)</option><option value="despido_injustificado">Despido (Art. 45 CT)</option><option value="mutuo_acuerdo">Mutuo Acuerdo</option><option value="fin_contrato">Finalización de Contrato Determinado</option><option value="fuerza_mayor">Causas de Fuerza Mayor</option></select></div>
                     <div class="form-group"><label for="fechaInicioSueldoPendiente">Fecha Inicio Sueldo Pendiente:</label><input type="date" id="fechaInicioSueldoPendiente" title="Fecha de inicio del último período de pago no liquidado."></div>
                     <div class="form-group"><label for="sueldoPendienteDias">Días de Sueldo Pendiente:</label><input type="number" id="sueldoPendienteDias" required min="0" step="1" value="0" title="Días trabajados en el último período que no han sido pagados."></div>
-                    <!-- CORRECCIÓN: Se cambió el campo de vacaciones -->
                     <div class="form-group">
                         <label for="vacacionesPendientes">Días de Vacaciones Pendientes de Gozar:</label>
                         <input type="number" id="vacacionesPendientes" required min="0" step="0.01" value="0" title="Total de días de vacaciones que el empleado tiene acumulados y no ha gozado.">
+                    </div>
+                    <!-- CAMPO NUEVO: Otros Ingresos -->
+                    <div class="form-group">
+                        <label for="otrosIngresos">Otros Ingresos (Comisiones, Bonos, etc.) (C$):</label>
+                        <input type="number" id="otrosIngresos" required min="0" step="0.01" value="0" title="Monto por comisiones, bonificaciones u otros ingresos variables a incluir en la liquidación.">
                     </div>
                  </div>
             </fieldset>
