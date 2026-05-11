@@ -11,6 +11,11 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', e => { e.preventDefault(); calcularYMostrarLiquidacion(); });
     closeModal.addEventListener('click', () => modal.style.display = 'none');
     window.addEventListener('click', e => { if (e.target == modal) modal.style.display = 'none'; });
+    
+    // Variable para controlar si el PDF está generándose
+    let generandoPDF = false;
+    
+    // Asignar la nueva función profesional
     btnGenerarPDF.addEventListener('click', imprimirLiquidacion);
 
     function parseDate(dateString) { if (!dateString) return null; const parts = dateString.split('-'); return new Date(parts[0], parts[1] - 1, parts[2]); }
@@ -92,13 +97,23 @@ document.addEventListener('DOMContentLoaded', function() {
         // VISUALIZACIÓN ACTUALIZADA: Se añade la fila de "Otros Ingresos"
         pdfContent.innerHTML = `
             <div class="pdf-header"><h2>${data.nombreEmpresa}</h2><p>LIQUIDACION FINAL EN C$</p></div>
-            <table class="info-table"><tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr><tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatDate(data.fechaIngreso)}</td></tr><tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatDate(data.fechaSalida)}</td></tr><tr><td class="label">NOMBRE DEL EMPLEADO</td><td class="value">${data.nombreEmpleado}</td></tr><tr><td class="label">CEDULA DE IDENTIDAD</td><td class="value">${data.cedula}</td></tr><tr><td class="label">MOTIVO DE RETIRO</td><td class="value">${data.motivoRetiro}</td></tr><tr><td class="label">TIPO DE CONTRATO</td><td class="value">${data.tipoContrato}</td></tr><tr><td class="label">TIPO DE SALARIO</td><td class="value">${data.tipoSalario}</td></tr><tr><td class="label">PUESTO (CARGO DESEMPEÑADO)</td><td class="value">${data.puesto}</td></tr><tr><td class="label">SALARIO ORDINARIO MENSUAL</td><td class="value">${f(data.salarioMensual)}<span class="sub-value">SUELDO DIARIO ${salarioDiario.toFixed(5)}</span><span class="sub-value">SUELDO POR HORA ${(salarioDiario / 8).toFixed(4)}</span></td></tr></table>
+            <table class="info-table"><tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr>
+            <tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatDate(data.fechaIngreso)}</td></tr>
+            <tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatDate(data.fechaSalida)}</td></tr>
+            <tr><td class="label">NOMBRE DEL EMPLEADO</td><td class="value">${data.nombreEmpleado}</td></tr>
+            <tr><td class="label">CEDULA DE IDENTIDAD</td><td class="value">${data.cedula}</td></tr>
+            <tr><td class="label">MOTIVO DE RETIRO</td><td class="value">${data.motivoRetiro}</td></tr>
+            <tr><td class="label">TIPO DE CONTRATO</td><td class="value">${data.tipoContrato}</td></tr>
+            <tr><td class="label">TIPO DE SALARIO</td><td class="value">${data.tipoSalario}</td></tr>
+            <tr><td class="label">PUESTO (CARGO DESEMPEÑADO)</td><td class="value">${data.puesto}</td></tr>
+            <tr><td class="label">SALARIO ORDINARIO MENSUAL</td><td class="value">${f(data.salarioMensual)}<span class="sub-value">SUELDO DIARIO ${salarioDiario.toFixed(5)}</span><span class="sub-value">SUELDO POR HORA ${(salarioDiario / 8).toFixed(4)}</span></td></tr>
+            </table>
             <b>INGRESOS</b><hr>
             <table class="prestaciones-table">
-                <tr><td>SUELDO PENDIENTE DE PAGO</td><td>DEL</td><td>${formatDate(data.fechaInicioSueldoPendiente)}</td><td>AL DÍA</td><td>${formatDate(fechaFinSueldoPendiente)}</td><td>${data.sueldoPendienteDias}</td><td class="monto">${f(sueldoPendienteMonto)}</td></tr>
+                <tr><td class="concepto">SUELDO PENDIENTE DE PAGO</td><td>DEL</td><td>${formatDate(data.fechaInicioSueldoPendiente)}</td><td>AL DÍA</td><td>${formatDate(fechaFinSueldoPendiente)}</td><td>${data.sueldoPendienteDias}</td><td class="monto">${f(sueldoPendienteMonto)}</td></tr>
                 <!-- Fila nueva para Otros Ingresos -->
                 ${data.otrosIngresos > 0 ? `<tr><td class="concepto">Viaticos de Transporte, Alimentación y Hospedaje</td><td colspan="5"></td><td class="monto">${f(data.otrosIngresos)}</td></tr>` : ''}
-            </table>
+             </table>
             <b>PRESTACIONES SOCIALES</b>
             <table class="prestaciones-table"><thead><tr><th class="concepto">CONCEPTO</th><th>DEL</th><th>AL</th><th>DIAS</th><th>MESES</th><th>AÑOS</th><th>DIAS A FAVOR<div class="sub-header">(2.5 POR MES)</div></th><th>Deduccion de<br>vacaciones<br>descansadas</th><th>DIAS DE<br>VACACIONES<br>A PAGAR</th><th class="monto">MONTO EN C$</th></tr></thead><tbody><tr><td class="concepto">AGUINALDO<br>(Art. 93 CT)</td><td>${formatDate(fechaInicioAguinaldo)}</td><td>${formatDate(data.fechaSalida)}</td><td>${tiempoAguinaldo.days}</td><td>${tiempoAguinaldo.months}</td><td>${tiempoAguinaldo.years}</td><td colspan="3"></td><td class="monto">${f(aguinaldoProporcional)}</td></tr><tr><td class="concepto">VACACIONES<br>(Art. 78 CT)</td><td>${formatDate(data.fechaIngreso)}</td><td>${formatDate(data.fechaSalida)}</td><td>${tiempoTotalServicio.days}</td><td>${tiempoTotalServicio.months}</td><td>${tiempoTotalServicio.years}</td><td>${diasVacacionesGanadas.toFixed(2)}</td><td>${diasVacacionesGozadas.toFixed(2)}</td><td>${data.vacacionesPendientes.toFixed(2)}</td><td class="monto">${f(vacacionesMonto)}</td></tr><tr><td class="concepto">INDEM.ANT.<br>(Art. 45 CT)</td><td colspan="5">Tiempo de Servicio</td><td colspan="3"></td><td class="monto">${f(indemnizacionMonto)}</td></tr></tbody></table>
             <table class="totales-table"><tr><td class="label">TOTAL DE INGRESOS</td><td class="value">C$ ${f(totalIngresosBrutos)}</td></tr><tr><td class="label">MENOS DEDUCCIONES:</td><td class="value">C$ ${f(totalDeducciones)}</td></tr><tr><td class="label"><span class="highlight">FALTANTE DE INVENTARIO</span></td><td class="value"><span class="highlight">${f(data.deduccionInventario)}</span></td></tr><tr><td class="label">OTRAS DEDUCCIONES (INCL. LEY)</td><td class="value">${f(data.otrasDeducciones + deduccionINSS + deduccionIR)}</td></tr><tr><td class="label">NETO A RECIBIR:</td><td class="value">C$ ${f(netoAPagar)}</td></tr></table>
@@ -109,31 +124,140 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.style.display = 'block';
     }
     
-    function imprimirLiquidacion() {
+    // Función profesional para generar PDF con html2canvas + jsPDF
+    async function imprimirLiquidacion() {
+        // Evitar múltiples generaciones simultáneas
+        if (generandoPDF) {
+            return;
+        }
+        
+        const btnPDF = document.getElementById('btnGenerarPDF');
+        const textoOriginal = btnPDF.textContent;
+        
+        try {
+            generandoPDF = true;
+            btnPDF.textContent = '⏳ Generando PDF...';
+            btnPDF.disabled = true;
+            btnPDF.style.opacity = '0.7';
+            btnPDF.style.cursor = 'wait';
+            
+            // Obtener el elemento a convertir
+            const elemento = document.getElementById('pdf-content');
+            
+            // Configuración profesional para html2canvas
+            const canvas = await html2canvas(elemento, {
+                scale: 2.5,                    // Alta calidad
+                backgroundColor: '#ffffff',
+                logging: false,
+                useCORS: true,                 // Manejo de recursos externos
+                allowTaint: false,
+                windowWidth: elemento.scrollWidth,
+                windowHeight: elemento.scrollHeight
+            });
+            
+            // Configuración del PDF (tamaño A4)
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+            
+            // Calcular dimensiones para mantener proporción
+            const imgWidth = 210; // A4 width en mm
+            const pageHeight = 297; // A4 height en mm
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+            
+            // Agregar la primera página
+            const imgData = canvas.toDataURL('image/png', 1.0);
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            
+            // Agregar páginas adicionales si es necesario
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+            
+            // Guardar el PDF con nombre profesional
+            const fecha = new Date();
+            const nombreArchivo = `Liquidacion_${fecha.getFullYear()}-${(fecha.getMonth()+1).toString().padStart(2,'0')}-${fecha.getDate().toString().padStart(2,'0')}.pdf`;
+            pdf.save(nombreArchivo);
+            
+        } catch (error) {
+            console.error('Error al generar PDF:', error);
+            // Fallback elegante: mostrar mensaje y ofrecer impresión
+            const usarImpresion = confirm('No se pudo generar el PDF automáticamente. ¿Deseas abrir la ventana de impresión?');
+            if (usarImpresion) {
+                imprimirVentanaNavegador();
+            } else {
+                alert('Puedes intentar nuevamente o usar Ctrl+P para imprimir');
+            }
+        } finally {
+            // Restaurar botón
+            generandoPDF = false;
+            btnPDF.textContent = textoOriginal;
+            btnPDF.disabled = false;
+            btnPDF.style.opacity = '1';
+            btnPDF.style.cursor = 'pointer';
+        }
+    }
+    
+    // Función de respaldo (ventana de impresión tradicional)
+    function imprimirVentanaNavegador() {
         const contenidoParaImprimir = document.getElementById('pdf-content').innerHTML;
-        const estilos = document.querySelector('link[href="style.css"]').outerHTML;
-        const ventanaImpresion = window.open('', '_blank');
+        const estilos = document.querySelector('link[href="style.css"]');
+        const ventanaImpresion = window.open('', '_blank', 'width=800,height=600,toolbar=yes,menubar=yes,scrollbars=yes');
+        
+        if (!ventanaImpresion) {
+            alert('Por favor, permite las ventanas emergentes para esta página');
+            return;
+        }
+        
         ventanaImpresion.document.write(`
+            <!DOCTYPE html>
             <html>
                 <head>
                     <title>Comprobante de Liquidación</title>
-                    ${estilos}
+                    <meta charset="UTF-8">
+                    ${estilos ? estilos.outerHTML : ''}
                     <style>
-                        body { margin: 25px; background-color: #fff; }
-                        @media print { body { margin: 0; } }
+                        body { 
+                            margin: 20px; 
+                            padding: 20px; 
+                            background: white;
+                            font-family: Arial, sans-serif;
+                        }
+                        .btn-pdf, .close-button {
+                            display: none !important;
+                        }
+                        @media print {
+                            body {
+                                margin: 0;
+                                padding: 0;
+                            }
+                        }
                     </style>
                 </head>
                 <body>
                     ${contenidoParaImprimir}
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                                window.close();
+                            }, 300);
+                        };
+                    <\/script>
                 </body>
             </html>
         `);
+        
         ventanaImpresion.document.close();
-        ventanaImpresion.onload = function() {
-            ventanaImpresion.focus();
-            ventanaImpresion.print();
-            ventanaImpresion.close();
-        };
     }
 
     function sifecha(fechaInicio, fechaFin) {
@@ -149,4 +273,3 @@ document.addEventListener('DOMContentLoaded', function() {
         var Unidades=function(num){switch(num){case 1:return"UN";case 2:return"DOS";case 3:return"TRES";case 4:return"CUATRO";case 5:return"CINCO";case 6:return"SEIS";case 7:return"SIETE";case 8:return"OCHO";case 9:return"NUEVE"}return""};var Decenas=function(num){let a=Math.floor(num/10),r=num-10*a;switch(a){case 1:switch(r){case 0:return"DIEZ";case 1:return"ONCE";case 2:return"DOCE";case 3:return"TRECE";case 4:return"CATORCE";case 5:return"QUINCE";default:return"DIECI"+Unidades(r)}case 2:switch(r){case 0:return"VEINTE";default:return"VEINTI"+Unidades(r)}case 3:return DecenasY("TREINTA",r);case 4:return DecenasY("CUARENTA",r);case 5:return DecenasY("CINCUENTA",r);case 6:return DecenasY("SESENTA",r);case 7:return DecenasY("SETENTA",r);case 8:return DecenasY("OCHENTA",r);case 9:return DecenasY("NOVENTA",r);case 0:return Unidades(r)}};function DecenasY(e,r){return r>0?e+" Y "+Unidades(r):e}function Centenas(e){let r=Math.floor(e/100),t=e-100*r;switch(r){case 1:return t>0?"CIENTO "+Decenas(t):"CIEN";case 2:return"DOSCIENTOS "+Decenas(t);case 3:return"TRESCIENTOS "+Decenas(t);case 4:return"CUATROCIENTOS "+Decenas(t);case 5:return"QUINIENTOS "+Decenas(t);case 6:return"SEISCIENTOS "+Decenas(t);case 7:return"SETECIENTOS "+Decenas(t);case 8:return"OCHOCIENTOS "+Decenas(t);case 9:return"NOVECIENTOS "+Decenas(t)}return Decenas(t)}function Seccion(e,r,t,n){let a=Math.floor(e/r),o=e-a*r,s="";return a>0&&(s=a>1?Centenas(a)+" "+n:t),o>0&&(s+=""),s}function Miles(e){let r=1e3,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MIL","MIL"),o=Centenas(n);return""==a?o:a+" "+o}function Millones(e){let r=1e6,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MILLON DE","MILLONES DE"),o=Miles(n);return""==a?o:a+" "+o}let currency={plural:"CÓRDOBAS",singular:"CÓRDOBA"},data={numero:num,enteros:Math.floor(num),centavos:Math.round(100*num)-100*Math.floor(num),letrasCentavos:"",letrasMonedaPlural:currency.plural,letrasMonedaSingular:currency.singular};return data.centavos>0&&(data.letrasCentavos="CON "+data.centavos.toString().padStart(2,"0")+"/100"),0==data.enteros?"CERO "+data.letrasMonedaPlural+" "+data.letrasCentavos:1==data.enteros?Millones(data.enteros)+" "+data.letrasMonedaSingular+" "+data.letrasCentavos:Millones(data.enteros)+" "+data.letrasMonedaPlural+" "+data.letrasCentavos
     }
 });
-
