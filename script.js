@@ -75,7 +75,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const vacacionesMonto = salarioDiario * data.vacacionesPendientes;
         
         // === CÁLCULO DE INDEMNIZACIÓN (Art. 45 CT) ===
-        // Solo NO aplica para: Renuncia Inmediata/Abandono (renuncia_sin_preaviso) y Despido con Causa Justa (despido_justificado)
         let indemnizacionMonto = 0;
         const motivosSinIndemnizacion = ['renuncia_sin_preaviso', 'despido_justificado'];
         
@@ -104,13 +103,131 @@ document.addEventListener('DOMContentLoaded', function() {
         const f = (n) => n.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const formatDate = (d) => d ? d.toLocaleDateString('es-NI', { day: 'numeric', month: 'numeric', year: 'numeric' }) : '';
         
-        // === GENERACIÓN DEL HTML DEL MODAL (formato original intacto) ===
+        // === FUNCIONES DE FORMATO MEJORADAS ===
+        // Formato para montos: muestra "N/A" si es 0
+        const formatMonto = (valor) => {
+            if (valor === 0 || valor === null || valor === undefined) return "N/A";
+            return `C$ ${f(valor)}`;
+        };
+        
+        // Formato para días: muestra "N/A" si es 0
+        const formatDias = (dias) => {
+            if (dias === 0 || dias === null || dias === undefined) return "N/A";
+            return dias;
+        };
+        
+        // Formato para fechas: muestra "N/A" si no hay fecha
+        const formatFechaProfesional = (fecha) => {
+            if (!fecha) return "N/A";
+            return formatDate(fecha);
+        };
+        
+        // Generar HTML del sueldo pendiente (con validación)
+        const sueldoPendienteHTML = (() => {
+            if (data.sueldoPendienteDias === 0 || sueldoPendienteMonto === 0) {
+                return `
+                    <tr>
+                        <td class="concepto">SUELDO PENDIENTE DE PAGO</td>
+                        <td colspan="5">No aplica (sin días pendientes)</td>
+                        <td class="monto">N/A</td>
+                    </tr>
+                `;
+            }
+            return `
+                <tr>
+                    <td class="concepto">SUELDO PENDIENTE DE PAGO</td>
+                    <td>DEL</td>
+                    <td>${formatFechaProfesional(data.fechaInicioSueldoPendiente)}</td>
+                    <td>AL DÍA</td>
+                    <td>${formatFechaProfesional(fechaFinSueldoPendiente)}</td>
+                    <td>${formatDias(data.sueldoPendienteDias)}</td>
+                    <td class="monto">${formatMonto(sueldoPendienteMonto)}</td>
+                </tr>
+            `;
+        })();
+        
+        // Generar HTML de vacaciones (con validación)
+        const vacacionesHTML = (() => {
+            if (data.vacacionesPendientes === 0 || vacacionesMonto === 0) {
+                return `
+                    <tr>
+                        <td class="concepto">VACACIONES<br>(Art. 78 CT)</td>
+                        <td colspan="7">No aplica (sin días pendientes)</td>
+                        <td class="monto">N/A</td>
+                    </tr>
+                `;
+            }
+            return `
+                <tr>
+                    <td class="concepto">VACACIONES<br>(Art. 78 CT)</td>
+                    <td>${formatFechaProfesional(data.fechaIngreso)}</td>
+                    <td>${formatFechaProfesional(data.fechaSalida)}</td>
+                    <td>${formatDias(tiempoTotalServicio.days)}</td>
+                    <td>${tiempoTotalServicio.months}</td>
+                    <td>${tiempoTotalServicio.years}</td>
+                    <td>${diasVacacionesGanadas.toFixed(2)}</td>
+                    <td>${diasVacacionesGozadas.toFixed(2)}</td>
+                    <td>${formatDias(data.vacacionesPendientes)}</td>
+                    <td class="monto">${formatMonto(vacacionesMonto)}</td>
+                </tr>
+            `;
+        })();
+        
+        // Generar HTML de indemnización (con validación)
+        const indemnizacionHTML = (() => {
+            if (indemnizacionMonto === 0) {
+                let motivoTexto = "";
+                if (data.motivoRetiroValue === 'renuncia_sin_preaviso') {
+                    motivoTexto = "Renuncia inmediata/abandono - No aplica según Art. 45 CT";
+                } else if (data.motivoRetiroValue === 'despido_justificado') {
+                    motivoTexto = "Despido con causa justa - No aplica según Art. 45 CT";
+                } else {
+                    motivoTexto = "No aplica (tiempo de servicio insuficiente o motivo no califica)";
+                }
+                return `
+                    <tr>
+                        <td class="concepto">INDEM.ANT.<br>(Art. 45 CT)</td>
+                        <td colspan="7">${motivoTexto}</td>
+                        <td class="monto">N/A</td>
+                    </tr>
+                `;
+            }
+            return `
+                <tr>
+                    <td class="concepto">INDEM.ANT.<br>(Art. 45 CT)</td>
+                    <td colspan="5">Tiempo de Servicio</td>
+                    <td colspan="3"></td>
+                    <td class="monto">${formatMonto(indemnizacionMonto)}</td>
+                </tr>
+            `;
+        })();
+        
+        // Generar HTML de deducciones (con validación)
+        const deduccionesHTML = (() => {
+            let html = '';
+            if (deduccionINSS > 0) {
+                html += `<tr><td class="label">(-) INSS LABORAL (7%)</td><td class="value">${formatMonto(deduccionINSS)}</td></tr>`;
+            }
+            if (data.deduccionInventario > 0) {
+                html += `<tr><td class="label">(-) FALTANTE DE INVENTARIO</td><td class="value">${formatMonto(data.deduccionInventario)}</td></tr>`;
+            }
+            if (data.otrasDeducciones > 0) {
+                html += `<tr><td class="label">(-) OTRAS DEDUCCIONES</td><td class="value">${formatMonto(data.otrasDeducciones)}</td></tr>`;
+            }
+            if (html === '') {
+                html = `<tr><td class="label">DEDUCCIONES APLICADAS</td><td class="value">Ninguna</td></tr>`;
+            }
+            return html;
+        })();
+        
+        // === GENERACIÓN DEL HTML DEL MODAL (formato mejorado) ===
         pdfContent.innerHTML = `
             <div class="pdf-header"><h2>${data.nombreEmpresa}</h2><p>LIQUIDACION FINAL EN C$</p></div>
             <table class="info-table">
-                <tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr>
-                <tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatDate(data.fechaIngreso)}</td></tr>
-                <tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatDate(data.fechaSalida)}</td></tr>
+                <tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatFechaProfesional(data.fechaElaboracion)}</td></tr>
+                <tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatFechaProfesional(data.fechaIngreso)}</td></tr>
+                <tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatFechaProfesional(data.fechaSalida)}</td></tr>
+                <tr><td class="label">TIEMPO DE SERVICIO</td><td class="value">${tiempoTotalServicio.years} años, ${tiempoTotalServicio.months} meses, ${tiempoTotalServicio.days} días</td></tr>
                 <tr><td class="label">NOMBRE DEL EMPLEADO</td><td class="value">${data.nombreEmpleado}</td></tr>
                 <tr><td class="label">CEDULA DE IDENTIDAD</td><td class="value">${data.cedula}</td></tr>
                 <tr><td class="label">MOTIVO DE RETIRO</td><td class="value">${data.motivoRetiro}</td></tr>
@@ -121,29 +238,29 @@ document.addEventListener('DOMContentLoaded', function() {
             </table>
             <b>INGRESOS</b><hr>
             <table class="prestaciones-table">
-                <tr><td class="concepto">SUELDO PENDIENTE DE PAGO</td><td>DEL</td><td>${formatDate(data.fechaInicioSueldoPendiente)}</td><td>AL DÍA</td><td>${formatDate(fechaFinSueldoPendiente)}</td><td>${data.sueldoPendienteDias}</td><td class="monto">${f(sueldoPendienteMonto)}</td></tr>
-                ${data.otrosIngresos > 0 ? `<tr><td class="concepto">Viaticos de Transporte, Alimentación y Hospedaje</td><td colspan="5"></td><td class="monto">${f(data.otrosIngresos)}</td></tr>` : ''}
+                ${sueldoPendienteHTML}
+                ${data.otrosIngresos > 0 ? `<tr><td class="concepto">Viaticos de Transporte, Alimentación y Hospedaje</td><td colspan="5"></td><td class="monto">${formatMonto(data.otrosIngresos)}</td></tr>` : ''}
             </table>
             <b>PRESTACIONES SOCIALES</b>
             <table class="prestaciones-table"><thead><tr><th class="concepto">CONCEPTO</th><th>DEL</th><th>AL</th><th>DIAS</th><th>MESES</th><th>AÑOS</th><th>DIAS A FAVOR<div class="sub-header">(2.5 POR MES)</div></th><th>Deduccion de<br>vacaciones<br>descansadas</th><th>DIAS DE<br>VACACIONES<br>A PAGAR</th><th class="monto">MONTO EN C$</th></tr></thead><tbody>
-            <tr><td class="concepto">AGUINALDO<br>(Art. 93 CT)</td><td>${formatDate(fechaInicioAguinaldo)}</td><td>${formatDate(data.fechaSalida)}</td><td>${tiempoAguinaldo.days}</td><td>${tiempoAguinaldo.months}</td><td>${tiempoAguinaldo.years}</td><td colspan="3"></td><td class="monto">${f(aguinaldoProporcional)}</td></tr>
-            <tr><td class="concepto">VACACIONES<br>(Art. 78 CT)</td><td>${formatDate(data.fechaIngreso)}</td><td>${formatDate(data.fechaSalida)}</td><td>${tiempoTotalServicio.days}</td><td>${tiempoTotalServicio.months}</td><td>${tiempoTotalServicio.years}</td><td>${diasVacacionesGanadas.toFixed(2)}</td><td>${diasVacacionesGozadas.toFixed(2)}</td><td>${data.vacacionesPendientes.toFixed(2)}</td><td class="monto">${f(vacacionesMonto)}</td></tr>
-            <tr><td class="concepto">INDEM.ANT.<br>(Art. 45 CT)</td><td colspan="5">Tiempo de Servicio</td><td colspan="3"></td><td class="monto">${f(indemnizacionMonto)}</td></tr>
+                <tr><td class="concepto">AGUINALDO<br>(Art. 93 CT)</td><td>${formatFechaProfesional(fechaInicioAguinaldo)}</td><td>${formatFechaProfesional(data.fechaSalida)}</td><td>${formatDias(tiempoAguinaldo.days)}</td><td>${tiempoAguinaldo.months}</td><td>${tiempoAguinaldo.years}</td><td colspan="3"></td><td class="monto">${formatMonto(aguinaldoProporcional)}</td></tr>
+                ${vacacionesHTML}
+                ${indemnizacionHTML}
             </tbody></table>
-            <table class="totales-table"><tr><td class="label">TOTAL DE INGRESOS</td><td class="value">C$ ${f(totalIngresosBrutos)}</td></tr>
-            <tr><td class="label">MENOS DEDUCCIONES:</td><td class="value">C$ ${f(totalDeducciones)}</td></tr>
-            <tr><td class="label"><span class="highlight">FALTANTE DE INVENTARIO</span></td><td class="value"><span class="highlight">${f(data.deduccionInventario)}</span></td></tr>
-            <tr><td class="label">OTRAS DEDUCCIONES (INCL. LEY)</td><td class="value">${f(data.otrasDeducciones + deduccionINSS + deduccionIR)}</td></tr>
-            <tr><td class="label">NETO A RECIBIR:</td><td class="value">C$ ${f(netoAPagar)}</td></tr></table>
-            <table class="letras-table"><tr><td class="label">CANTIDAD EN LETRAS:</td><td class="value">${cantidadEnLetras}</td></tr></table>
-            <p class="texto-finiquito">Por este medio de la presente hago constar que recibo de <strong>${data.nombreEmpresa}</strong>, mi liquidación a mi entera satisfacción final, a la que tengo derecho según nuestras leyes. Eximiendo al señor EMPLEADOR de cualquier reclamo posterior. Finiquitando de esta manera el vínculo laboral. sin mas a que hacer referencias firma la presente liquidacion.</p>
-            <table class="firmas-table"><tr><td><div class="firma-block"><div class="label">ELABORADO POR:</div><div class="name">${data.elaboradoPor}</div></div></td><td><div class="firma-block"><div class="label">REVISADO POR:</div><div class="name">${data.revisadoPor}</div></div></td></tr>
-            <tr><td><div class="firma-block"><div class="label">RECIBI CONFORME:</div><div class="name">${data.nombreEmpleado}<br>${data.cedula}</div></div></td><td><div class="firma-block"><div class="label">AUTORIZADO POR:</div><div class="name">${data.autorizadoPor}</div></div></td></tr></table>
+            <table class="totales-table">
+                <tr><td class="label">TOTAL DE INGRESOS BRUTOS</td><td class="value">${formatMonto(totalIngresosBrutos)}</td></tr>
+                ${deduccionesHTML}
+                <tr class="total-row"><td class="label">NETO A RECIBIR</td><td class="value">${formatMonto(netoAPagar)}</td></tr>
+            </table>
+            <table class="letras-table"><tr><td class="label">CANTIDAD EN LETRAS</td><td class="value">${cantidadEnLetras}</td></tr></table>
+            <p class="texto-finiquito">Por este medio de la presente hago constar que recibo de <strong>${data.nombreEmpresa}</strong>, mi liquidación a mi entera satisfacción final, a la que tengo derecho según nuestras leyes. Eximiendo al señor EMPLEADOR de cualquier reclamo posterior. Finiquitando de esta manera el vínculo laboral. Sin más a que hacer referencia, firmo la presente liquidación.</p>
+            <table class="firmas-table"><tr><td><div class="firma-block"><div class="label">ELABORADO POR:</div><div class="name">${data.elaboradoPor || '___________________'}</div></div></td><td><div class="firma-block"><div class="label">REVISADO POR:</div><div class="name">${data.revisadoPor || '___________________'}</div></div></td></tr>
+            <tr><td><div class="firma-block"><div class="label">RECIBI CONFORME:</div><div class="name">${data.nombreEmpleado}<br>${data.cedula}</div></div></td><td><div class="firma-block"><div class="label">AUTORIZADO POR:</div><div class="name">${data.autorizadoPor || '___________________'}</div></div></td></tr></table>
         `;
         modal.style.display = 'block';
     }
     
-    // === NUEVA FUNCIÓN: Genera PDF con canvas (respeta 100% tu formato) ===
+    // === FUNCIÓN QUE GENERA PDF CAPTURANDO EL HTML EXACTO DEL MODAL ===
     async function generarPDFConCanvas() {
         if (window.generandoPDF) return;
         window.generandoPDF = true;
@@ -217,7 +334,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error al generar PDF:', error);
             alert('Error al generar el PDF. Se abrirá la ventana de impresión.');
-            // Fallback: ventana de impresión tradicional
             const htmlContent = document.getElementById('pdf-content').innerHTML;
             const estilos = document.querySelector('link[href="style.css"]')?.outerHTML || '';
             const ventana = window.open('', '_blank');
@@ -232,7 +348,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // === FUNCIÓN ORIGINAL sifecha (sin cambios) ===
     function sifecha(fechaInicio, fechaFin) {
         if (!fechaInicio || !fechaFin) return { years: 0, months: 0, days: 0 };
         let inicio = new Date(fechaInicio.getTime()); let fin = new Date(fechaFin.getTime());
@@ -242,7 +357,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return { years: anios, months: meses, days: dias };
     }
     
-    // === FUNCIÓN ORIGINAL numeroALetras (sin cambios) ===
     function numeroALetras(num) {
         var Unidades=function(num){switch(num){case 1:return"UN";case 2:return"DOS";case 3:return"TRES";case 4:return"CUATRO";case 5:return"CINCO";case 6:return"SEIS";case 7:return"SIETE";case 8:return"OCHO";case 9:return"NUEVE"}return""};var Decenas=function(num){let a=Math.floor(num/10),r=num-10*a;switch(a){case 1:switch(r){case 0:return"DIEZ";case 1:return"ONCE";case 2:return"DOCE";case 3:return"TRECE";case 4:return"CATORCE";case 5:return"QUINCE";default:return"DIECI"+Unidades(r)}case 2:switch(r){case 0:return"VEINTE";default:return"VEINTI"+Unidades(r)}case 3:return DecenasY("TREINTA",r);case 4:return DecenasY("CUARENTA",r);case 5:return DecenasY("CINCUENTA",r);case 6:return DecenasY("SESENTA",r);case 7:return DecenasY("SETENTA",r);case 8:return DecenasY("OCHENTA",r);case 9:return DecenasY("NOVENTA",r);case 0:return Unidades(r)}};function DecenasY(e,r){return r>0?e+" Y "+Unidades(r):e}function Centenas(e){let r=Math.floor(e/100),t=e-100*r;switch(r){case 1:return t>0?"CIENTO "+Decenas(t):"CIEN";case 2:return"DOSCIENTOS "+Decenas(t);case 3:return"TRESCIENTOS "+Decenas(t);case 4:return"CUATROCIENTOS "+Decenas(t);case 5:return"QUINIENTOS "+Decenas(t);case 6:return"SEISCIENTOS "+Decenas(t);case 7:return"SETECIENTOS "+Decenas(t);case 8:return"OCHOCIENTOS "+Decenas(t);case 9:return"NOVECIENTOS "+Decenas(t)}return Decenas(t)}function Seccion(e,r,t,n){let a=Math.floor(e/r),o=e-a*r,s="";return a>0&&(s=a>1?Centenas(a)+" "+n:t),o>0&&(s+=""),s}function Miles(e){let r=1e3,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MIL","MIL"),o=Centenas(n);return""==a?o:a+" "+o}function Millones(e){let r=1e6,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MILLON DE","MILLONES DE"),o=Miles(n);return""==a?o:a+" "+o}let currency={plural:"CÓRDOBAS",singular:"CÓRDOBA"},data={numero:num,enteros:Math.floor(num),centavos:Math.round(100*num)-100*Math.floor(num),letrasCentavos:"",letrasMonedaPlural:currency.plural,letrasMonedaSingular:currency.singular};return data.centavos>0&&(data.letrasCentavos="CON "+data.centavos.toString().padStart(2,"0")+"/100"),0==data.enteros?"CERO "+data.letrasMonedaPlural+" "+data.letrasCentavos:1==data.enteros?Millones(data.enteros)+" "+data.letrasMonedaSingular+" "+data.letrasCentavos:Millones(data.enteros)+" "+data.letrasMonedaPlural+" "+data.letrasCentavos
     }
