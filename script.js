@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variable para controlar si el PDF está generándose
     let generandoPDF = false;
     
-    // Asignar la función profesional de generación de PDF
-    btnGenerarPDF.addEventListener('click', imprimirLiquidacion);
+    // Asignar la función profesional de generación de PDF NATIVO
+    btnGenerarPDF.addEventListener('click', generarPDFNativo);
 
     // Función para parsear fechas
     function parseDate(dateString) { 
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', function() {
             autorizadoPor: document.getElementById('autorizadoPor').value.toUpperCase(),
         };
         
-        // Validación básica
+        // Validaciones
         if (!data.nombreEmpresa || !data.nombreEmpleado || !data.cedula || !data.puesto) {
             alert('Por favor, complete todos los campos obligatorios.');
             return;
@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const tiempoTotalServicio = calcularTiempoServicio(data.fechaIngreso, data.fechaSalida);
         
-        // Cálculo de Aguinaldo proporcional (Art. 93 CT)
+        // Cálculo de Aguinaldo
         let fechaInicioAguinaldo;
         const primeroDiciembreAnterior = new Date(data.fechaSalida.getFullYear(), 11, 1);
         if (data.fechaSalida.getMonth() < 11) { 
@@ -96,35 +96,34 @@ document.addEventListener('DOMContentLoaded', function() {
         const mesesParaAguinaldo = tiempoAguinaldo.years * 12 + tiempoAguinaldo.months + (tiempoAguinaldo.days / 30);
         const aguinaldoProporcional = (data.salarioMensual / 12) * mesesParaAguinaldo;
         
-        // Cálculo de Vacaciones (Art. 78 CT)
+        // Cálculo de Vacaciones
         const totalMesesTrabajados = tiempoTotalServicio.years * 12 + tiempoTotalServicio.months + (tiempoTotalServicio.days / 30);
         const diasVacacionesGanadas = totalMesesTrabajados * 2.5;
-        const diasVacacionesGozadas = Math.max(0, diasVacacionesGanadas - data.vacacionesPendientes);
         const vacacionesMonto = salarioDiario * data.vacacionesPendientes;
         
-        // Cálculo de Indemnización (Art. 45 CT)
+        // Cálculo de Indemnización
         let indemnizacionMonto = 0;
-        if (data.motivoRetiroValue !== 'renuncia_sin_preaviso' && data.motivoRetiroValue !== 'despido_justificado') {
+        if (data.motivoRetiroValue === 'despido_injustificado') {
             let diasIndemnizacion = 0;
             if (tiempoTotalServicio.years < 3) { 
-                diasIndemnizacion = (tiempoTotalServicio.years * 30) + (tiempoTotalServicio.months * (30 / 12)) + (tiempoTotalServicio.days * (30 / 12 / 30)); 
+                diasIndemnizacion = (tiempoTotalServicio.years * 30) + (tiempoTotalServicio.months * 2.5) + (tiempoTotalServicio.days / 30 * 2.5);
             } else { 
-                diasIndemnizacion = (3 * 30) + ((tiempoTotalServicio.years - 3) * 20) + (tiempoTotalServicio.months * (20 / 12)) + (tiempoTotalServicio.days * (20 / 12 / 30)); 
+                diasIndemnizacion = (3 * 30) + ((tiempoTotalServicio.years - 3) * 20) + (tiempoTotalServicio.months * (20 / 12)) + (tiempoTotalServicio.days * (20 / 12 / 30));
             }
             indemnizacionMonto = Math.min(150, diasIndemnizacion) * salarioDiario;
         }
 
-        // Total de ingresos brutos (incluye otros ingresos)
+        // Total de ingresos brutos
         const totalIngresosBrutos = sueldoPendienteMonto + aguinaldoProporcional + vacacionesMonto + indemnizacionMonto + data.otrosIngresos;
         
-        // --- Cálculos de Deducciones ---
+        // Deducciones
         const baseCalculoDeducciones = sueldoPendienteMonto + vacacionesMonto + data.otrosIngresos;
         let deduccionINSS = data.aplicarINSS ? baseCalculoDeducciones * 0.07 : 0;
-        let deduccionIR = 0; // IR simplificado - en producción se debe implementar la tabla completa
+        let deduccionIR = 0;
         
         const totalDeducciones = deduccionINSS + deduccionIR + data.deduccionInventario + data.otrasDeducciones;
         
-        // --- Cálculo Final ---
+        // Neto
         const netoAPagar = totalIngresosBrutos - totalDeducciones;
         const cantidadEnLetras = numeroALetras(netoAPagar);
         
@@ -132,7 +131,31 @@ document.addEventListener('DOMContentLoaded', function() {
         const f = (n) => n.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const formatDate = (d) => d ? d.toLocaleDateString('es-NI', { day: 'numeric', month: 'numeric', year: 'numeric' }) : '';
         
-        // Generar HTML del comprobante
+        // Almacenar datos para el PDF nativo
+        window.datosLiquidacion = {
+            ...data,
+            salarioDiario,
+            sueldoPendienteMonto,
+            fechaFinSueldoPendiente,
+            tiempoTotalServicio,
+            fechaInicioAguinaldo,
+            tiempoAguinaldo,
+            aguinaldoProporcional,
+            totalMesesTrabajados,
+            diasVacacionesGanadas,
+            vacacionesMonto,
+            indemnizacionMonto,
+            totalIngresosBrutos,
+            deduccionINSS,
+            deduccionIR,
+            totalDeducciones,
+            netoAPagar,
+            cantidadEnLetras,
+            formatDate,
+            f
+        };
+        
+        // Generar HTML para vista previa
         pdfContent.innerHTML = `
             <div class="pdf-header">
                 <h2>${data.nombreEmpresa}</h2>
@@ -141,280 +164,273 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             
             <table class="info-table">
-                <tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr>
+                <tr><td class="label">FECHA DE ELABORACION</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr>
                 <tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatDate(data.fechaIngreso)}</td></tr>
                 <tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatDate(data.fechaSalida)}</td></tr>
                 <tr><td class="label">TIEMPO TOTAL DE SERVICIO</td><td class="value">${tiempoTotalServicio.years} años, ${tiempoTotalServicio.months} meses, ${tiempoTotalServicio.days} días</td></tr>
                 <tr><td class="label">NOMBRE DEL EMPLEADO</td><td class="value">${data.nombreEmpleado}</td></tr>
                 <tr><td class="label">CEDULA DE IDENTIDAD</td><td class="value">${data.cedula}</td></tr>
                 <tr><td class="label">MOTIVO DE RETIRO</td><td class="value">${data.motivoRetiro}</td></tr>
-                <tr><td class="label">TIPO DE CONTRATO</td><td class="value">${data.tipoContrato}</td></tr>
-                <tr><td class="label">TIPO DE SALARIO</td><td class="value">${data.tipoSalario}</td></tr>
-                <tr><td class="label">PUESTO (CARGO DESEMPEÑADO)</td><td class="value">${data.puesto}</td></tr>
-                <tr><td class="label">SALARIO ORDINARIO MENSUAL</td><td class="value">C$ ${f(data.salarioMensual)}<br><span class="sub-value">SUELDO DIARIO: C$ ${salarioDiario.toFixed(5)}</span><br><span class="sub-value">SUELDO POR HORA: C$ ${(salarioDiario / 8).toFixed(4)}</span></td></tr>
+                <tr><td class="label">PUESTO</td><td class="value">${data.puesto}</td></tr>
+                <tr><td class="label">SALARIO MENSUAL</td><td class="value">C$ ${f(data.salarioMensual)} (Diario: C$ ${salarioDiario.toFixed(2)})</td></tr>
             </table>
             
-            <div class="section-title">DETALLE DE INGRESOS</div>
+            <div class="section-title">DETALLE DE LIQUIDACION</div>
             <table class="prestaciones-table">
-                <thead>
-                    <tr>
-                        <th class="concepto">CONCEPTO</th>
-                        <th>DEL</th>
-                        <th>AL</th>
-                        <th>DIAS</th>
-                        <th>MESES</th>
-                        <th>AÑOS</th>
-                        <th>DIAS A FAVOR<br><span class="sub-header">(2.5 POR MES)</span></th>
-                        <th>DIAS A PAGAR</th>
-                        <th class="monto">MONTO C$</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>CONCEPTO</th><th>DIAS</th><th>MONTO C$</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td class="concepto">SUELDO PENDIENTE</td>
-                        <td>${formatDate(data.fechaInicioSueldoPendiente)}</td>
-                        <td>${formatDate(fechaFinSueldoPendiente)}</td>
-                        <td>${data.sueldoPendienteDias}</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>${data.sueldoPendienteDias}</td>
-                        <td class="monto">${f(sueldoPendienteMonto)}</td>
-                    </tr>
-                    ${data.otrosIngresos > 0 ? `
-                    <tr>
-                        <td class="concepto">VIATICOS (Transporte, Alimentación, Hospedaje)</td>
-                        <td colspan="7">Monto fijo</td>
-                        <td class="monto">${f(data.otrosIngresos)}</td>
-                    </tr>` : ''}
-                    <tr>
-                        <td class="concepto">AGUINALDO<br><span class="sub-header">(Art. 93 CT)</span></td>
-                        <td>${formatDate(fechaInicioAguinaldo)}</td>
-                        <td>${formatDate(data.fechaSalida)}</td>
-                        <td>${tiempoAguinaldo.days}</td>
-                        <td>${tiempoAguinaldo.months}</td>
-                        <td>${tiempoAguinaldo.years}</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td class="monto">${f(aguinaldoProporcional)}</td>
-                    </tr>
-                    <tr>
-                        <td class="concepto">VACACIONES<br><span class="sub-header">(Art. 78 CT)</span></td>
-                        <td>${formatDate(data.fechaIngreso)}</td>
-                        <td>${formatDate(data.fechaSalida)}</td>
-                        <td>${tiempoTotalServicio.days}</td>
-                        <td>${tiempoTotalServicio.months}</td>
-                        <td>${tiempoTotalServicio.years}</td>
-                        <td>${diasVacacionesGanadas.toFixed(2)}</td>
-                        <td>${data.vacacionesPendientes.toFixed(2)}</td>
-                        <td class="monto">${f(vacacionesMonto)}</td>
-                    </tr>
-                    <tr>
-                        <td class="concepto">INDEMNIZACION<br><span class="sub-header">(Art. 45 CT)</span></td>
-                        <td colspan="5">Por tiempo de servicio</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td class="monto">${f(indemnizacionMonto)}</td>
-                    </tr>
+                    <tr><td>SUELDO PENDIENTE</td><td>${data.sueldoPendienteDias}</td><td class="monto">${f(sueldoPendienteMonto)}</td></tr>
+                    ${data.otrosIngresos > 0 ? `<tr><td>VIATICOS</td><td>-</td><td class="monto">${f(data.otrosIngresos)}</td></tr>` : ''}
+                    <tr><td>AGUINALDO (Art. 93 CT)</td><td>-</td><td class="monto">${f(aguinaldoProporcional)}</td></tr>
+                    <tr><td>VACACIONES (Art. 78 CT)</td><td>${data.vacacionesPendientes}</td><td class="monto">${f(vacacionesMonto)}</td></tr>
+                    ${indemnizacionMonto > 0 ? `<tr><td>INDEMNIZACION (Art. 45 CT)</td><td>-</td><td class="monto">${f(indemnizacionMonto)}</td></tr>` : ''}
                 </tbody>
             </table>
             
             <table class="totales-table">
-                <tr><td class="label">TOTAL DE INGRESOS BRUTOS</td><td class="value">C$ ${f(totalIngresosBrutos)}</td></tr>
-                <tr><td class="label">MENOS DEDUCCIONES:</td><td class="value">C$ ${f(totalDeducciones)}</td></tr>
-                ${data.deduccionInventario > 0 ? `<tr><td class="label">- FALTANTE DE INVENTARIO</td><td class="value">C$ ${f(data.deduccionInventario)}</td></tr>` : ''}
-                ${data.otrasDeducciones > 0 ? `<tr><td class="label">- OTRAS DEDUCCIONES</td><td class="value">C$ ${f(data.otrasDeducciones)}</td></tr>` : ''}
-                ${deduccionINSS > 0 ? `<tr><td class="label">- INSS LABORAL (7%)</td><td class="value">C$ ${f(deduccionINSS)}</td></tr>` : ''}
+                <tr><td class="label">TOTAL INGRESOS BRUTOS</td><td class="value">C$ ${f(totalIngresosBrutos)}</td></tr>
+                ${deduccionINSS > 0 ? `<tr><td class="label">INSS (7%)</td><td class="value">C$ ${f(deduccionINSS)}</td></tr>` : ''}
+                ${data.deduccionInventario > 0 ? `<tr><td class="label">FALTANTE INVENTARIO</td><td class="value">C$ ${f(data.deduccionInventario)}</td></tr>` : ''}
+                ${data.otrasDeducciones > 0 ? `<tr><td class="label">OTRAS DEDUCCIONES</td><td class="value">C$ ${f(data.otrasDeducciones)}</td></tr>` : ''}
                 <tr class="total-row"><td class="label">NETO A RECIBIR</td><td class="value">C$ ${f(netoAPagar)}</td></tr>
             </table>
             
-            <table class="letras-table">
-                <tr><td class="label">CANTIDAD EN LETRAS:</td><td class="value">${cantidadEnLetras}</td></tr>
-            </table>
+            <table class="letras-table"><tr><td class="label">CANTIDAD EN LETRAS</td><td class="value">${cantidadEnLetras}</td></tr></table>
             
             <div class="texto-finiquito">
-                <p>Por este medio hago constar que recibo de <strong>${data.nombreEmpresa}</strong>, mi liquidación final a mi entera satisfacción, correspondiente a las prestaciones sociales y demás derechos que me corresponden según el Código del Trabajo de Nicaragua. Declaro que no tengo nada más que reclamar al EMPLEADOR por concepto de derechos laborales, dando por finalizada la relación laboral en todas sus partes.</p>
+                <p>Por este medio recibo de <strong>${data.nombreEmpresa}</strong>, mi liquidación final a entera satisfacción, dando por finalizada la relación laboral.</p>
             </div>
             
             <table class="firmas-table">
-                <tr>
-                    <td><div class="firma-block"><div class="label">ELABORADO POR:</div><div class="name">${data.elaboradoPor}</div><div class="date">${formatDate(data.fechaElaboracion)}</div></div></td>
-                    <td><div class="firma-block"><div class="label">REVISADO POR:</div><div class="name">${data.revisadoPor}</div></div></td>
-                </tr>
-                <tr>
-                    <td><div class="firma-block"><div class="label">RECIBI CONFORME:</div><div class="name">${data.nombreEmpleado}</div><div class="id">${data.cedula}</div></div></td>
-                    <td><div class="firma-block"><div class="label">AUTORIZADO POR:</div><div class="name">${data.autorizadoPor}</div></div></td>
-                </tr>
+                <tr><td><div class="firma-block">ELABORADO POR<br>${data.elaboradoPor}</div></td><td><div class="firma-block">RECIBI CONFORME<br>${data.nombreEmpleado}</div></td></tr>
+                <tr><td><div class="firma-block">REVISADO POR<br>${data.revisadoPor}</div></td><td><div class="firma-block">AUTORIZADO POR<br>${data.autorizadoPor}</div></td></tr>
             </table>
         `;
         
         modal.style.display = 'block';
     }
     
-    // Función profesional para generar PDF con escala dinámica (prioriza 1 página)
-    async function imprimirLiquidacion() {
-        // Evitar múltiples generaciones simultáneas
-        if (generandoPDF) {
+    // FUNCIÓN PROFESIONAL: Genera PDF con TEXTO NATIVO (no imagen)
+    async function generarPDFNativo() {
+        if (generandoPDF || !window.datosLiquidacion) {
             return;
         }
         
         const btnPDF = document.getElementById('btnGenerarPDF');
         const textoOriginal = btnPDF.textContent;
+        const d = window.datosLiquidacion;
         
         try {
             generandoPDF = true;
             btnPDF.textContent = '⏳ Generando PDF...';
             btnPDF.disabled = true;
-            btnPDF.style.opacity = '0.7';
-            btnPDF.style.cursor = 'wait';
             
-            // Obtener el elemento a convertir
-            const elemento = document.getElementById('pdf-content');
-            
-            // Medir el contenido para saber si cabe en una página
-            const contenidoHeight = elemento.scrollHeight;
-            const contenidoWidth = elemento.scrollWidth;
-            
-            // Configuración del PDF (tamaño A4)
             const { jsPDF } = window.jspdf;
-            
-            // Márgenes profesionales (en mm)
-            const marginTop = 15;
-            const marginBottom = 15;
-            const marginLeft = 15;
-            const marginRight = 15;
-            
-            // Dimensiones de la página A4 en mm
-            const pageWidthMM = 210;
-            const pageHeightMM = 297;
-            
-            // Ancho y alto disponible para el contenido (restando márgenes)
-            const availableWidthMM = pageWidthMM - marginLeft - marginRight;
-            const availableHeightMM = pageHeightMM - marginTop - marginBottom;
-            
-            // Calcular escala necesaria para que el contenido quepa horizontalmente (1px = 0.352778mm en 96dpi)
-            const horizontalScale = availableWidthMM / (contenidoWidth * 0.352778);
-            
-            // Calcular cuánto espacio vertical ocuparía con esa escala
-            const estimatedHeightMM = (contenidoHeight * 0.352778) * horizontalScale;
-            
-            // Determinar si cabe en una página (con tolerancia de 10mm)
-            const cabeEnUnaPagina = estimatedHeightMM <= availableHeightMM + 10;
-            
-            let scale = horizontalScale;
-            let usarMultiPagina = false;
-            
-            if (!cabeEnUnaPagina) {
-                // Si no cabe, calcular la escala máxima para que quepa exactamente
-                const escalaPorAltura = availableHeightMM / (contenidoHeight * 0.352778);
-                scale = Math.min(horizontalScale, escalaPorAltura);
-                
-                const finalHeightMM = (contenidoHeight * 0.352778) * scale;
-                
-                if (finalHeightMM > availableHeightMM + 5) {
-                    usarMultiPagina = true;
-                    scale = Math.min(horizontalScale, 1.2);
-                }
-            }
-            
-            // Capturar el elemento con la escala calculada
-            const canvas = await html2canvas(elemento, {
-                scale: Math.min(scale * 1.5, 3),
-                backgroundColor: '#ffffff',
-                logging: false,
-                useCORS: true,
-                allowTaint: false,
-                windowWidth: elemento.scrollWidth,
-                windowHeight: elemento.scrollHeight
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
             });
             
-            const imgData = canvas.toDataURL('image/png', 1.0);
+            // Configuración de página
+            const marginX = 15;
+            const marginY = 20;
+            let y = marginY;
+            const pageWidth = 210;
+            const contentWidth = pageWidth - (marginX * 2);
             
-            if (!usarMultiPagina) {
-                // === MODO UNA PÁGINA ===
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
-                
-                const imgWidthMM = availableWidthMM;
-                const imgHeightMM = (canvas.height * imgWidthMM) / canvas.width;
-                
-                // Centrar verticalmente
-                let verticalOffset = marginTop;
-                if (imgHeightMM < availableHeightMM) {
-                    verticalOffset = marginTop + (availableHeightMM - imgHeightMM) / 2;
-                }
-                
-                pdf.addImage(imgData, 'PNG', marginLeft, verticalOffset, imgWidthMM, imgHeightMM);
-                
-                // Numeración
-                pdf.setFontSize(8);
-                pdf.setTextColor(100, 100, 100);
-                pdf.text('Página 1 de 1', 105, pageHeightMM - 8, { align: 'center' });
-                
-                const fecha = new Date();
-                const nombreArchivo = `Liquidacion_${fecha.getFullYear()}-${(fecha.getMonth()+1).toString().padStart(2,'0')}-${fecha.getDate().toString().padStart(2,'0')}.pdf`;
-                pdf.save(nombreArchivo);
-                
-            } else {
-                // === MODO MÚLTIPLES PÁGINAS ===
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
-                
-                const imgWidthMM = availableWidthMM;
-                const imgHeightMM = (canvas.height * imgWidthMM) / canvas.width;
-                
-                let heightLeft = imgHeightMM;
-                let currentPosition = 0;
-                let pageNumber = 1;
-                
-                pdf.addImage(imgData, 'PNG', marginLeft, marginTop - currentPosition, imgWidthMM, imgHeightMM);
-                heightLeft -= availableHeightMM;
-                currentPosition += availableHeightMM;
-                
-                while (heightLeft > 5) {
+            // Fuentes y estilos
+            pdf.setFont('helvetica', 'normal');
+            
+            // === ENCABEZADO ===
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(d.nombreEmpresa, pageWidth / 2, y, { align: 'center' });
+            y += 6;
+            
+            pdf.setFontSize(11);
+            pdf.text('LIQUIDACION FINAL DE PRESTACIONES LABORALES', pageWidth / 2, y, { align: 'center' });
+            y += 5;
+            
+            pdf.setFontSize(10);
+            pdf.text('En Córdobas Netos (C$)', pageWidth / 2, y, { align: 'center' });
+            y += 8;
+            
+            // === LÍNEA SEPARADORA ===
+            pdf.line(marginX, y, pageWidth - marginX, y);
+            y += 6;
+            
+            // === INFORMACIÓN GENERAL ===
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('DATOS GENERALES', marginX, y);
+            y += 5;
+            
+            pdf.setFont('helvetica', 'normal');
+            const infoLines = [
+                `FECHA DE ELABORACION: ${d.formatDate(d.fechaElaboracion)}`,
+                `FECHA DE INGRESO: ${d.formatDate(d.fechaIngreso)}`,
+                `FECHA DE SALIDA: ${d.formatDate(d.fechaSalida)}`,
+                `TIEMPO DE SERVICIO: ${d.tiempoTotalServicio.years} años, ${d.tiempoTotalServicio.months} meses, ${d.tiempoTotalServicio.days} dias`,
+                `EMPLEADO: ${d.nombreEmpleado}`,
+                `CEDULA: ${d.cedula}`,
+                `MOTIVO: ${d.motivoRetiro}`,
+                `PUESTO: ${d.puesto}`,
+                `SALARIO MENSUAL: C$ ${d.f(d.salarioMensual)} (Diario: C$ ${d.salarioDiario.toFixed(2)})`
+            ];
+            
+            for (const line of infoLines) {
+                pdf.text(line, marginX, y);
+                y += 5;
+                if (y > 270) {
                     pdf.addPage();
-                    pdf.addImage(imgData, 'PNG', marginLeft, marginTop - currentPosition, imgWidthMM, imgHeightMM);
-                    heightLeft -= availableHeightMM;
-                    currentPosition += availableHeightMM;
-                    pageNumber++;
+                    y = marginY;
                 }
-                
-                for (let i = 1; i <= pageNumber; i++) {
-                    pdf.setPage(i);
-                    pdf.setFontSize(8);
-                    pdf.setTextColor(100, 100, 100);
-                    pdf.text(`Página ${i} de ${pageNumber}`, 105, pageHeightMM - 8, { align: 'center' });
-                }
-                
-                const fecha = new Date();
-                const nombreArchivo = `Liquidacion_${fecha.getFullYear()}-${(fecha.getMonth()+1).toString().padStart(2,'0')}-${fecha.getDate().toString().padStart(2,'0')}.pdf`;
-                pdf.save(nombreArchivo);
             }
+            
+            y += 3;
+            pdf.line(marginX, y, pageWidth - marginX, y);
+            y += 6;
+            
+            // === DETALLE DE LIQUIDACIÓN ===
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('DETALLE DE LIQUIDACION', marginX, y);
+            y += 6;
+            
+            // Tabla de ingresos
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('INGRESOS:', marginX, y);
+            y += 5;
+            
+            pdf.setFont('helvetica', 'normal');
+            const ingresos = [
+                { concepto: 'SUELDO PENDIENTE', dias: d.sueldoPendienteDias, monto: d.sueldoPendienteMonto },
+                ...(d.otrosIngresos > 0 ? [{ concepto: 'VIATICOS', dias: '-', monto: d.otrosIngresos }] : []),
+                { concepto: 'AGUINALDO (Art. 93 CT)', dias: '-', monto: d.aguinaldoProporcional },
+                { concepto: 'VACACIONES (Art. 78 CT)', dias: d.vacacionesPendientes, monto: d.vacacionesMonto }
+            ];
+            
+            if (d.indemnizacionMonto > 0) {
+                ingresos.push({ concepto: 'INDEMNIZACION (Art. 45 CT)', dias: '-', monto: d.indemnizacionMonto });
+            }
+            
+            for (const item of ingresos) {
+                pdf.text(`• ${item.concepto}: ${item.dias !== '-' ? item.dias + ' dias' : ''}`, marginX, y);
+                pdf.text(`C$ ${d.f(item.monto)}`, pageWidth - marginX - 30, y);
+                y += 5;
+                if (y > 270) {
+                    pdf.addPage();
+                    y = marginY;
+                }
+            }
+            
+            y += 3;
+            pdf.line(marginX, y, pageWidth - marginX, y);
+            y += 5;
+            
+            // === TOTALES ===
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('RESUMEN DE LIQUIDACION', marginX, y);
+            y += 6;
+            
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`TOTAL INGRESOS BRUTOS:`, marginX, y);
+            pdf.text(`C$ ${d.f(d.totalIngresosBrutos)}`, pageWidth - marginX - 30, y);
+            y += 5;
+            
+            if (d.deduccionINSS > 0) {
+                pdf.text(`(-) INSS LABORAL (7%):`, marginX, y);
+                pdf.text(`C$ ${d.f(d.deduccionINSS)}`, pageWidth - marginX - 30, y);
+                y += 5;
+            }
+            
+            if (d.deduccionInventario > 0) {
+                pdf.text(`(-) FALTANTE INVENTARIO:`, marginX, y);
+                pdf.text(`C$ ${d.f(d.deduccionInventario)}`, pageWidth - marginX - 30, y);
+                y += 5;
+            }
+            
+            if (d.otrasDeducciones > 0) {
+                pdf.text(`(-) OTRAS DEDUCCIONES:`, marginX, y);
+                pdf.text(`C$ ${d.f(d.otrasDeducciones)}`, pageWidth - marginX - 30, y);
+                y += 5;
+            }
+            
+            y += 3;
+            pdf.line(marginX, y, pageWidth - marginX, y);
+            y += 5;
+            
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(11);
+            pdf.text(`NETO A RECIBIR:`, marginX, y);
+            pdf.text(`C$ ${d.f(d.netoAPagar)}`, pageWidth - marginX - 30, y);
+            y += 7;
+            
+            pdf.setFontSize(9);
+            pdf.text(`CANTIDAD EN LETRAS: ${d.cantidadEnLetras}`, marginX, y);
+            y += 10;
+            
+            // === TEXTO DE FINIQUITO ===
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(8);
+            const finiquito = `Por este medio recibo de ${d.nombreEmpresa}, mi liquidacion final a entera satisfaccion, 
+dando por finalizada la relacion laboral en todas sus partes. Declaro no tener nada mas que reclamar.`;
+            pdf.text(finiquito, marginX, y, { maxWidth: contentWidth });
+            y += 15;
+            
+            // === FIRMAS ===
+            if (y > 250) {
+                pdf.addPage();
+                y = marginY;
+            }
+            
+            pdf.line(marginX, y, pageWidth - marginX, y);
+            y += 5;
+            
+            const firmaWidth = (contentWidth - 10) / 2;
+            pdf.text('ELABORADO POR:', marginX, y);
+            pdf.text(d.elaboradoPor, marginX, y + 5);
+            pdf.text(d.formatDate(d.fechaElaboracion), marginX, y + 10);
+            
+            pdf.text('RECIBI CONFORME:', marginX + firmaWidth + 10, y);
+            pdf.text(d.nombreEmpleado, marginX + firmaWidth + 10, y + 5);
+            pdf.text(d.cedula, marginX + firmaWidth + 10, y + 10);
+            
+            y += 20;
+            
+            pdf.text('REVISADO POR:', marginX, y);
+            pdf.text(d.revisadoPor, marginX, y + 5);
+            
+            pdf.text('AUTORIZADO POR:', marginX + firmaWidth + 10, y);
+            pdf.text(d.autorizadoPor, marginX + firmaWidth + 10, y + 5);
+            
+            // === NUMERACIÓN DE PÁGINA ===
+            const pageCount = pdf.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                pdf.setPage(i);
+                pdf.setFontSize(7);
+                pdf.setTextColor(128);
+                pdf.text(`Pagina ${i} de ${pageCount}`, pageWidth / 2, 287, { align: 'center' });
+                pdf.setTextColor(0);
+            }
+            
+            // Guardar PDF
+            const fecha = new Date();
+            const nombreArchivo = `Liquidacion_${fecha.getFullYear()}-${(fecha.getMonth()+1).toString().padStart(2,'0')}-${fecha.getDate().toString().padStart(2,'0')}.pdf`;
+            pdf.save(nombreArchivo);
             
         } catch (error) {
             console.error('Error al generar PDF:', error);
-            const usarImpresion = confirm('No se pudo generar el PDF automáticamente. ¿Deseas abrir la ventana de impresión?');
-            if (usarImpresion) {
-                imprimirVentanaNavegador();
-            } else {
-                alert('Puedes intentar nuevamente o usar Ctrl+P para imprimir');
-            }
+            alert('Error al generar el PDF. Se abrirá la ventana de impresión.');
+            imprimirVentanaNavegador();
         } finally {
             generandoPDF = false;
             btnPDF.textContent = textoOriginal;
             btnPDF.disabled = false;
-            btnPDF.style.opacity = '1';
-            btnPDF.style.cursor = 'pointer';
         }
     }
     
-    // Función de respaldo (ventana de impresión tradicional)
+    // Función de respaldo (ventana de impresión)
     function imprimirVentanaNavegador() {
         const contenidoParaImprimir = document.getElementById('pdf-content').innerHTML;
         const estilos = document.querySelector('link[href="style.css"]');
@@ -433,121 +449,64 @@ document.addEventListener('DOMContentLoaded', function() {
                     <meta charset="UTF-8">
                     ${estilos ? estilos.outerHTML : ''}
                     <style>
-                        body { 
-                            margin: 20px; 
-                            padding: 20px; 
-                            background: white;
-                            font-family: Arial, sans-serif;
-                        }
-                        .btn-pdf, .close-button {
-                            display: none !important;
-                        }
-                        @media print {
-                            body {
-                                margin: 0;
-                                padding: 0;
-                            }
-                        }
+                        body { margin: 20px; padding: 20px; background: white; font-family: Arial, sans-serif; }
+                        .btn-pdf, .close-button { display: none !important; }
+                        @media print { body { margin: 0; padding: 0; } }
                     </style>
                 </head>
-                <body>
-                    ${contenidoParaImprimir}
-                    <script>
-                        window.onload = function() {
-                            setTimeout(function() {
-                                window.print();
-                                window.close();
-                            }, 300);
-                        };
-                    <\/script>
-                </body>
+                <body>${contenidoParaImprimir}<script>window.onload=function(){setTimeout(function(){window.print();window.close();},300)};<\/script></body>
             </html>
         `);
-        
         ventanaImpresion.document.close();
     }
 
-    // Función para calcular tiempo de servicio entre dos fechas
     function calcularTiempoServicio(fechaInicio, fechaFin) {
         if (!fechaInicio || !fechaFin) return { years: 0, months: 0, days: 0 };
-        
         let inicio = new Date(fechaInicio.getTime());
         let fin = new Date(fechaFin.getTime());
-        
         let anios = fin.getFullYear() - inicio.getFullYear();
         let meses = fin.getMonth() - inicio.getMonth();
         let dias = fin.getDate() - inicio.getDate();
-        
-        if (dias < 0) {
-            meses--;
-            dias += new Date(fin.getFullYear(), fin.getMonth(), 0).getDate();
-        }
-        
-        if (meses < 0) {
-            anios--;
-            meses += 12;
-        }
-        
+        if (dias < 0) { meses--; dias += new Date(fin.getFullYear(), fin.getMonth(), 0).getDate(); }
+        if (meses < 0) { anios--; meses += 12; }
         return { years: anios, months: meses, days: dias };
     }
     
-    // Función para convertir números a letras
     function numeroALetras(num) {
-        const Unidades = function(num) {
-            switch(num) {
-                case 1: return "UN";
-                case 2: return "DOS";
-                case 3: return "TRES";
-                case 4: return "CUATRO";
-                case 5: return "CINCO";
-                case 6: return "SEIS";
-                case 7: return "SIETE";
-                case 8: return "OCHO";
-                case 9: return "NUEVE";
+        const Unidades = (n) => {
+            switch(n) {
+                case 1: return "UN"; case 2: return "DOS"; case 3: return "TRES";
+                case 4: return "CUATRO"; case 5: return "CINCO"; case 6: return "SEIS";
+                case 7: return "SIETE"; case 8: return "OCHO"; case 9: return "NUEVE";
                 default: return "";
             }
         };
         
-        const Decenas = function(num) {
-            let a = Math.floor(num / 10);
-            let r = num - (10 * a);
-            
+        const Decenas = (n) => {
+            let a = Math.floor(n / 10);
+            let r = n - (10 * a);
             switch(a) {
                 case 1:
                     switch(r) {
-                        case 0: return "DIEZ";
-                        case 1: return "ONCE";
-                        case 2: return "DOCE";
-                        case 3: return "TRECE";
-                        case 4: return "CATORCE";
-                        case 5: return "QUINCE";
+                        case 0: return "DIEZ"; case 1: return "ONCE"; case 2: return "DOCE";
+                        case 3: return "TRECE"; case 4: return "CATORCE"; case 5: return "QUINCE";
                         default: return "DIECI" + Unidades(r);
                     }
-                case 2:
-                    switch(r) {
-                        case 0: return "VEINTE";
-                        default: return "VEINTI" + Unidades(r);
-                    }
-                case 3: return DecenasY("TREINTA", r);
-                case 4: return DecenasY("CUARENTA", r);
-                case 5: return DecenasY("CINCUENTA", r);
-                case 6: return DecenasY("SESENTA", r);
-                case 7: return DecenasY("SETENTA", r);
-                case 8: return DecenasY("OCHENTA", r);
-                case 9: return DecenasY("NOVENTA", r);
-                case 0: return Unidades(r);
-                default: return "";
+                case 2: return r === 0 ? "VEINTE" : "VEINTI" + Unidades(r);
+                case 3: return r > 0 ? "TREINTA Y " + Unidades(r) : "TREINTA";
+                case 4: return r > 0 ? "CUARENTA Y " + Unidades(r) : "CUARENTA";
+                case 5: return r > 0 ? "CINCUENTA Y " + Unidades(r) : "CINCUENTA";
+                case 6: return r > 0 ? "SESENTA Y " + Unidades(r) : "SESENTA";
+                case 7: return r > 0 ? "SETENTA Y " + Unidades(r) : "SETENTA";
+                case 8: return r > 0 ? "OCHENTA Y " + Unidades(r) : "OCHENTA";
+                case 9: return r > 0 ? "NOVENTA Y " + Unidades(r) : "NOVENTA";
+                default: return Unidades(r);
             }
         };
         
-        function DecenasY(strNum, r) {
-            return r > 0 ? strNum + " Y " + Unidades(r) : strNum;
-        }
-        
-        function Centenas(num) {
-            let r = Math.floor(num / 100);
-            let t = num - (100 * r);
-            
+        const Centenas = (n) => {
+            let r = Math.floor(n / 100);
+            let t = n - (100 * r);
             switch(r) {
                 case 1: return t > 0 ? "CIENTO " + Decenas(t) : "CIEN";
                 case 2: return "DOSCIENTOS " + Decenas(t);
@@ -560,66 +519,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 9: return "NOVECIENTOS " + Decenas(t);
                 default: return Decenas(t);
             }
-        }
+        };
         
-        function Seccion(num, divisor, strSingular, strPlural) {
+        const Seccion = (num, divisor, strSingular, strPlural) => {
             let a = Math.floor(num / divisor);
             let o = num - (a * divisor);
             let result = "";
-            
             if (a > 0) {
                 result = a > 1 ? Centenas(a) + " " + strPlural : strSingular;
             }
-            
             return result;
-        }
+        };
         
-        function Miles(num) {
+        const Miles = (num) => {
             let divisor = 1000;
             let a = Math.floor(num / divisor);
             let n = num - (a * divisor);
             let str = Seccion(num, divisor, "UN MIL", "MIL");
             let centenas = Centenas(n);
-            
             return str === "" ? centenas : str + " " + centenas;
-        }
+        };
         
-        function Millones(num) {
+        const Millones = (num) => {
             let divisor = 1000000;
             let a = Math.floor(num / divisor);
             let n = num - (a * divisor);
             let str = Seccion(num, divisor, "UN MILLON DE", "MILLONES DE");
             let miles = Miles(n);
-            
             return str === "" ? miles : str + " " + miles;
-        }
-        
-        const currency = {
-            plural: "CÓRDOBAS",
-            singular: "CÓRDOBA"
         };
         
-        const data = {
-            numero: num,
-            enteros: Math.floor(num),
-            centavos: Math.round((num * 100)) - (Math.floor(num) * 100),
-            letrasCentavos: "",
-            letrasMonedaPlural: currency.plural,
-            letrasMonedaSingular: currency.singular
-        };
+        const enteros = Math.floor(num);
+        const centavos = Math.round((num * 100)) - (enteros * 100);
+        const letrasCentavos = centavos > 0 ? "CON " + centavos.toString().padStart(2, "0") + "/100" : "";
         
-        if (data.centavos > 0) {
-            data.letrasCentavos = "CON " + data.centavos.toString().padStart(2, "0") + "/100";
-        }
-        
-        if (data.enteros === 0) {
-            return "CERO " + data.letrasMonedaPlural + " " + data.letrasCentavos;
-        }
-        
-        if (data.enteros === 1) {
-            return Millones(data.enteros) + " " + data.letrasMonedaSingular + " " + data.letrasCentavos;
-        }
-        
-        return Millones(data.enteros) + " " + data.letrasMonedaPlural + " " + data.letrasCentavos;
+        if (enteros === 0) return "CERO CORDOBAS " + letrasCentavos;
+        if (enteros === 1) return Millones(enteros) + " CORDOBA " + letrasCentavos;
+        return Millones(enteros) + " CORDOBAS " + letrasCentavos;
     }
 });
