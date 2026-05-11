@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', e => { e.preventDefault(); calcularYMostrarLiquidacion(); });
     closeModal.addEventListener('click', () => modal.style.display = 'none');
     window.addEventListener('click', e => { if (e.target == modal) modal.style.display = 'none'; });
-    btnGenerarPDF.addEventListener('click', generarPDFConJsPDF);
+    btnGenerarPDF.addEventListener('click', generarPDFConCanvas);
 
     function parseDate(dateString) { if (!dateString) return null; const parts = dateString.split('-'); return new Date(parts[0], parts[1] - 1, parts[2]); }
 
@@ -43,100 +43,68 @@ document.addEventListener('DOMContentLoaded', function() {
             autorizadoPor: document.getElementById('autorizadoPor').value.toUpperCase(),
         };
         
-        // Validaciones
-        if (!data.nombreEmpresa || !data.nombreEmpleado) {
-            alert('Por favor, complete los datos de empresa y empleado.');
-            return;
-        }
-        if (data.fechaSalida < data.fechaIngreso) { 
-            alert('La fecha de salida no puede ser anterior a la fecha de ingreso.'); 
-            return; 
-        }
-        if (data.salarioMensual <= 0) { 
-            alert('El salario mensual debe ser mayor a cero.'); 
-            return; 
-        }
+        // Validación inicial
+        if (data.fechaSalida < data.fechaIngreso) { alert('La fecha de salida no puede ser anterior a la fecha de ingreso.'); return; }
 
         // --- Cálculos de Ingresos y Prestaciones ---
         const salarioDiario = data.salarioMensual / 30;
         const sueldoPendienteMonto = salarioDiario * data.sueldoPendienteDias;
+        
         let fechaFinSueldoPendiente = null;
         if (data.fechaInicioSueldoPendiente && data.sueldoPendienteDias > 0) {
             fechaFinSueldoPendiente = new Date(data.fechaInicioSueldoPendiente.getTime());
             fechaFinSueldoPendiente.setDate(fechaFinSueldoPendiente.getDate() + data.sueldoPendienteDias - 1);
         }
-        const tiempoTotalServicio = calcularTiempoServicio(data.fechaIngreso, data.fechaSalida);
         
+        const tiempoTotalServicio = sifecha(data.fechaIngreso, data.fechaSalida);
+        
+        // Cálculo de Aguinaldo (Art. 93 CT)
         let fechaInicioAguinaldo;
         const primeroDiciembreAnterior = new Date(data.fechaSalida.getFullYear(), 11, 1);
-        if (data.fechaSalida.getMonth() < 11) { 
-            primeroDiciembreAnterior.setFullYear(data.fechaSalida.getFullYear() - 1); 
-        }
+        if (data.fechaSalida.getMonth() < 11) { primeroDiciembreAnterior.setFullYear(data.fechaSalida.getFullYear() - 1); }
         fechaInicioAguinaldo = (data.fechaIngreso < primeroDiciembreAnterior) ? primeroDiciembreAnterior : data.fechaIngreso;
         
-        const tiempoAguinaldo = calcularTiempoServicio(fechaInicioAguinaldo, data.fechaSalida);
+        const tiempoAguinaldo = sifecha(fechaInicioAguinaldo, data.fechaSalida);
         const mesesParaAguinaldo = tiempoAguinaldo.years * 12 + tiempoAguinaldo.months + (tiempoAguinaldo.days / 30);
         const aguinaldoProporcional = (data.salarioMensual / 12) * mesesParaAguinaldo;
+        
+        // Cálculo de Vacaciones (Art. 78 CT)
         const totalMesesTrabajados = tiempoTotalServicio.years * 12 + tiempoTotalServicio.months + (tiempoTotalServicio.days / 30);
         const diasVacacionesGanadas = totalMesesTrabajados * 2.5;
         const diasVacacionesGozadas = Math.max(0, diasVacacionesGanadas - data.vacacionesPendientes);
         const vacacionesMonto = salarioDiario * data.vacacionesPendientes;
         
+        // === CÁLCULO DE INDEMNIZACIÓN (Art. 45 CT) ===
+        // Solo NO aplica para: Renuncia Inmediata/Abandono (renuncia_sin_preaviso) y Despido con Causa Justa (despido_justificado)
         let indemnizacionMonto = 0;
-        if (data.motivoRetiroValue === 'despido_injustificado') {
+        const motivosSinIndemnizacion = ['renuncia_sin_preaviso', 'despido_justificado'];
+        
+        if (!motivosSinIndemnizacion.includes(data.motivoRetiroValue)) {
             let diasIndemnizacion = 0;
-            if (tiempoTotalServicio.years < 3) { 
-                diasIndemnizacion = (tiempoTotalServicio.years * 30) + (tiempoTotalServicio.months * 2.5) + (tiempoTotalServicio.days / 30 * 2.5);
-            } else { 
+            if (tiempoTotalServicio.years < 3) {
+                diasIndemnizacion = (tiempoTotalServicio.years * 30) + (tiempoTotalServicio.months * (30 / 12)) + (tiempoTotalServicio.days * (30 / 12 / 30));
+            } else {
                 diasIndemnizacion = (3 * 30) + ((tiempoTotalServicio.years - 3) * 20) + (tiempoTotalServicio.months * (20 / 12)) + (tiempoTotalServicio.days * (20 / 12 / 30));
             }
             indemnizacionMonto = Math.min(150, diasIndemnizacion) * salarioDiario;
         }
 
+        // Total de ingresos brutos
         const totalIngresosBrutos = sueldoPendienteMonto + aguinaldoProporcional + vacacionesMonto + indemnizacionMonto + data.otrosIngresos;
         
+        // Cálculo de Deducciones
         const baseCalculoDeducciones = sueldoPendienteMonto + vacacionesMonto + data.otrosIngresos;
         let deduccionINSS = data.aplicarINSS ? baseCalculoDeducciones * 0.07 : 0;
         let deduccionIR = 0;
         const totalDeducciones = deduccionINSS + deduccionIR + data.deduccionInventario + data.otrasDeducciones;
         
+        // Neto a pagar
         const netoAPagar = totalIngresosBrutos - totalDeducciones;
         const cantidadEnLetras = numeroALetras(netoAPagar);
         const f = (n) => n.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const formatDate = (d) => d ? d.toLocaleDateString('es-NI', { day: 'numeric', month: 'numeric', year: 'numeric' }) : '';
         
-        // Guardar datos para el PDF
-        window.datosLiquidacion = {
-            nombreEmpresa: data.nombreEmpresa,
-            fechaElaboracion: data.fechaElaboracion,
-            fechaIngreso: data.fechaIngreso,
-            fechaSalida: data.fechaSalida,
-            nombreEmpleado: data.nombreEmpleado,
-            cedula: data.cedula,
-            motivoRetiro: data.motivoRetiro,
-            puesto: data.puesto,
-            salarioMensual: data.salarioMensual,
-            salarioDiario: salarioDiario,
-            sueldoPendienteMonto: sueldoPendienteMonto,
-            aguinaldoProporcional: aguinaldoProporcional,
-            vacacionesMonto: vacacionesMonto,
-            indemnizacionMonto: indemnizacionMonto,
-            otrosIngresos: data.otrosIngresos,
-            deduccionINSS: deduccionINSS,
-            deduccionInventario: data.deduccionInventario,
-            otrasDeducciones: data.otrasDeducciones,
-            totalIngresosBrutos: totalIngresosBrutos,
-            totalDeducciones: totalDeducciones,
-            netoAPagar: netoAPagar,
-            cantidadEnLetras: cantidadEnLetras,
-            elaboradoPor: data.elaboradoPor,
-            revisadoPor: data.revisadoPor,
-            autorizadoPor: data.autorizadoPor,
-            formatDate: formatDate,
-            f: f
-        };
-        
-        // VISUALIZACIÓN EN EL MODAL
+        // === GENERACIÓN DEL HTML DEL MODAL (formato original intacto) ===
         pdfContent.innerHTML = `
             <div class="pdf-header"><h2>${data.nombreEmpresa}</h2><p>LIQUIDACION FINAL EN C$</p></div>
             <table class="info-table">
@@ -175,8 +143,8 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.style.display = 'block';
     }
     
-    // Función que genera PDF capturando el HTML exacto del modal
-    async function generarPDFConJsPDF() {
+    // === NUEVA FUNCIÓN: Genera PDF con canvas (respeta 100% tu formato) ===
+    async function generarPDFConCanvas() {
         if (window.generandoPDF) return;
         window.generandoPDF = true;
         
@@ -249,6 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error al generar PDF:', error);
             alert('Error al generar el PDF. Se abrirá la ventana de impresión.');
+            // Fallback: ventana de impresión tradicional
             const htmlContent = document.getElementById('pdf-content').innerHTML;
             const estilos = document.querySelector('link[href="style.css"]')?.outerHTML || '';
             const ventana = window.open('', '_blank');
@@ -263,124 +232,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function calcularTiempoServicio(fechaInicio, fechaFin) {
+    // === FUNCIÓN ORIGINAL sifecha (sin cambios) ===
+    function sifecha(fechaInicio, fechaFin) {
         if (!fechaInicio || !fechaFin) return { years: 0, months: 0, days: 0 };
-        let inicio = new Date(fechaInicio.getTime());
-        let fin = new Date(fechaFin.getTime());
-        let anios = fin.getFullYear() - inicio.getFullYear();
-        let meses = fin.getMonth() - inicio.getMonth();
-        let dias = fin.getDate() - inicio.getDate();
+        let inicio = new Date(fechaInicio.getTime()); let fin = new Date(fechaFin.getTime());
+        let anios = fin.getFullYear() - inicio.getFullYear(); let meses = fin.getMonth() - inicio.getMonth(); let dias = fin.getDate() - inicio.getDate();
         if (dias < 0) { meses--; dias += new Date(fin.getFullYear(), fin.getMonth(), 0).getDate(); }
         if (meses < 0) { anios--; meses += 12; }
         return { years: anios, months: meses, days: dias };
     }
     
+    // === FUNCIÓN ORIGINAL numeroALetras (sin cambios) ===
     function numeroALetras(num) {
-        var Unidades = function(num) {
-            switch(num) {
-                case 1: return "UN";
-                case 2: return "DOS";
-                case 3: return "TRES";
-                case 4: return "CUATRO";
-                case 5: return "CINCO";
-                case 6: return "SEIS";
-                case 7: return "SIETE";
-                case 8: return "OCHO";
-                case 9: return "NUEVE";
-                default: return "";
-            }
-        };
-        
-        var Decenas = function(num) {
-            let a = Math.floor(num / 10);
-            let r = num - (10 * a);
-            switch(a) {
-                case 1:
-                    switch(r) {
-                        case 0: return "DIEZ";
-                        case 1: return "ONCE";
-                        case 2: return "DOCE";
-                        case 3: return "TRECE";
-                        case 4: return "CATORCE";
-                        case 5: return "QUINCE";
-                        default: return "DIECI" + Unidades(r);
-                    }
-                case 2:
-                    switch(r) {
-                        case 0: return "VEINTE";
-                        default: return "VEINTI" + Unidades(r);
-                    }
-                case 3: return (r > 0) ? "TREINTA Y " + Unidades(r) : "TREINTA";
-                case 4: return (r > 0) ? "CUARENTA Y " + Unidades(r) : "CUARENTA";
-                case 5: return (r > 0) ? "CINCUENTA Y " + Unidades(r) : "CINCUENTA";
-                case 6: return (r > 0) ? "SESENTA Y " + Unidades(r) : "SESENTA";
-                case 7: return (r > 0) ? "SETENTA Y " + Unidades(r) : "SETENTA";
-                case 8: return (r > 0) ? "OCHENTA Y " + Unidades(r) : "OCHENTA";
-                case 9: return (r > 0) ? "NOVENTA Y " + Unidades(r) : "NOVENTA";
-                default: return Unidades(r);
-            }
-        };
-        
-        function DecenasY(strNum, r) {
-            return r > 0 ? strNum + " Y " + Unidades(r) : strNum;
-        }
-        
-        function Centenas(num) {
-            let r = Math.floor(num / 100);
-            let t = num - (100 * r);
-            switch(r) {
-                case 1: return t > 0 ? "CIENTO " + Decenas(t) : "CIEN";
-                case 2: return "DOSCIENTOS " + Decenas(t);
-                case 3: return "TRESCIENTOS " + Decenas(t);
-                case 4: return "CUATROCIENTOS " + Decenas(t);
-                case 5: return "QUINIENTOS " + Decenas(t);
-                case 6: return "SEISCIENTOS " + Decenas(t);
-                case 7: return "SETECIENTOS " + Decenas(t);
-                case 8: return "OCHOCIENTOS " + Decenas(t);
-                case 9: return "NOVECIENTOS " + Decenas(t);
-                default: return Decenas(t);
-            }
-        }
-        
-        function Seccion(num, divisor, strSingular, strPlural) {
-            let a = Math.floor(num / divisor);
-            let o = num - (a * divisor);
-            let result = "";
-            if (a > 0) {
-                result = a > 1 ? Centenas(a) + " " + strPlural : strSingular;
-            }
-            return result;
-        }
-        
-        function Miles(num) {
-            let divisor = 1000;
-            let a = Math.floor(num / divisor);
-            let n = num - (a * divisor);
-            let str = Seccion(num, divisor, "UN MIL", "MIL");
-            let centenas = Centenas(n);
-            return str === "" ? centenas : str + " " + centenas;
-        }
-        
-        function Millones(num) {
-            let divisor = 1000000;
-            let a = Math.floor(num / divisor);
-            let n = num - (a * divisor);
-            let str = Seccion(num, divisor, "UN MILLON DE", "MILLONES DE");
-            let miles = Miles(n);
-            return str === "" ? miles : str + " " + miles;
-        }
-        
-        let currency = { plural: "CÓRDOBAS", singular: "CÓRDOBA" };
-        let enteros = Math.floor(num);
-        let centavos = Math.round((num * 100)) - (enteros * 100);
-        let letrasCentavos = centavos > 0 ? "CON " + centavos.toString().padStart(2, "0") + "/100" : "";
-        
-        if (enteros === 0) {
-            return "CERO " + currency.plural + " " + letrasCentavos;
-        }
-        if (enteros === 1) {
-            return Millones(enteros) + " " + currency.singular + " " + letrasCentavos;
-        }
-        return Millones(enteros) + " " + currency.plural + " " + letrasCentavos;
+        var Unidades=function(num){switch(num){case 1:return"UN";case 2:return"DOS";case 3:return"TRES";case 4:return"CUATRO";case 5:return"CINCO";case 6:return"SEIS";case 7:return"SIETE";case 8:return"OCHO";case 9:return"NUEVE"}return""};var Decenas=function(num){let a=Math.floor(num/10),r=num-10*a;switch(a){case 1:switch(r){case 0:return"DIEZ";case 1:return"ONCE";case 2:return"DOCE";case 3:return"TRECE";case 4:return"CATORCE";case 5:return"QUINCE";default:return"DIECI"+Unidades(r)}case 2:switch(r){case 0:return"VEINTE";default:return"VEINTI"+Unidades(r)}case 3:return DecenasY("TREINTA",r);case 4:return DecenasY("CUARENTA",r);case 5:return DecenasY("CINCUENTA",r);case 6:return DecenasY("SESENTA",r);case 7:return DecenasY("SETENTA",r);case 8:return DecenasY("OCHENTA",r);case 9:return DecenasY("NOVENTA",r);case 0:return Unidades(r)}};function DecenasY(e,r){return r>0?e+" Y "+Unidades(r):e}function Centenas(e){let r=Math.floor(e/100),t=e-100*r;switch(r){case 1:return t>0?"CIENTO "+Decenas(t):"CIEN";case 2:return"DOSCIENTOS "+Decenas(t);case 3:return"TRESCIENTOS "+Decenas(t);case 4:return"CUATROCIENTOS "+Decenas(t);case 5:return"QUINIENTOS "+Decenas(t);case 6:return"SEISCIENTOS "+Decenas(t);case 7:return"SETECIENTOS "+Decenas(t);case 8:return"OCHOCIENTOS "+Decenas(t);case 9:return"NOVECIENTOS "+Decenas(t)}return Decenas(t)}function Seccion(e,r,t,n){let a=Math.floor(e/r),o=e-a*r,s="";return a>0&&(s=a>1?Centenas(a)+" "+n:t),o>0&&(s+=""),s}function Miles(e){let r=1e3,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MIL","MIL"),o=Centenas(n);return""==a?o:a+" "+o}function Millones(e){let r=1e6,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MILLON DE","MILLONES DE"),o=Miles(n);return""==a?o:a+" "+o}let currency={plural:"CÓRDOBAS",singular:"CÓRDOBA"},data={numero:num,enteros:Math.floor(num),centavos:Math.round(100*num)-100*Math.floor(num),letrasCentavos:"",letrasMonedaPlural:currency.plural,letrasMonedaSingular:currency.singular};return data.centavos>0&&(data.letrasCentavos="CON "+data.centavos.toString().padStart(2,"0")+"/100"),0==data.enteros?"CERO "+data.letrasMonedaPlural+" "+data.letrasCentavos:1==data.enteros?Millones(data.enteros)+" "+data.letrasMonedaSingular+" "+data.letrasCentavos:Millones(data.enteros)+" "+data.letrasMonedaPlural+" "+data.letrasCentavos
     }
 });
