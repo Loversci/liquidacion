@@ -43,12 +43,19 @@ document.addEventListener('DOMContentLoaded', function() {
             autorizadoPor: document.getElementById('autorizadoPor').value.toUpperCase(),
         };
         
+        // Validaciones
         if (!data.nombreEmpresa || !data.nombreEmpleado) {
             alert('Por favor, complete los datos de empresa y empleado.');
             return;
         }
-        if (data.fechaSalida < data.fechaIngreso) { alert('La fecha de salida no puede ser anterior a la fecha de ingreso.'); return; }
-        if (data.salarioMensual <= 0) { alert('El salario mensual debe ser mayor a cero.'); return; }
+        if (data.fechaSalida < data.fechaIngreso) { 
+            alert('La fecha de salida no puede ser anterior a la fecha de ingreso.'); 
+            return; 
+        }
+        if (data.salarioMensual <= 0) { 
+            alert('El salario mensual debe ser mayor a cero.'); 
+            return; 
+        }
 
         // --- Cálculos de Ingresos y Prestaciones ---
         const salarioDiario = data.salarioMensual / 30;
@@ -58,23 +65,31 @@ document.addEventListener('DOMContentLoaded', function() {
             fechaFinSueldoPendiente = new Date(data.fechaInicioSueldoPendiente.getTime());
             fechaFinSueldoPendiente.setDate(fechaFinSueldoPendiente.getDate() + data.sueldoPendienteDias - 1);
         }
-        const tiempoTotalServicio = sifecha(data.fechaIngreso, data.fechaSalida);
+        const tiempoTotalServicio = calcularTiempoServicio(data.fechaIngreso, data.fechaSalida);
+        
         let fechaInicioAguinaldo;
         const primeroDiciembreAnterior = new Date(data.fechaSalida.getFullYear(), 11, 1);
-        if (data.fechaSalida.getMonth() < 11) { primeroDiciembreAnterior.setFullYear(data.fechaSalida.getFullYear() - 1); }
+        if (data.fechaSalida.getMonth() < 11) { 
+            primeroDiciembreAnterior.setFullYear(data.fechaSalida.getFullYear() - 1); 
+        }
         fechaInicioAguinaldo = (data.fechaIngreso < primeroDiciembreAnterior) ? primeroDiciembreAnterior : data.fechaIngreso;
-        const tiempoAguinaldo = sifecha(fechaInicioAguinaldo, data.fechaSalida);
+        
+        const tiempoAguinaldo = calcularTiempoServicio(fechaInicioAguinaldo, data.fechaSalida);
         const mesesParaAguinaldo = tiempoAguinaldo.years * 12 + tiempoAguinaldo.months + (tiempoAguinaldo.days / 30);
         const aguinaldoProporcional = (data.salarioMensual / 12) * mesesParaAguinaldo;
         const totalMesesTrabajados = tiempoTotalServicio.years * 12 + tiempoTotalServicio.months + (tiempoTotalServicio.days / 30);
         const diasVacacionesGanadas = totalMesesTrabajados * 2.5;
         const diasVacacionesGozadas = Math.max(0, diasVacacionesGanadas - data.vacacionesPendientes);
         const vacacionesMonto = salarioDiario * data.vacacionesPendientes;
+        
         let indemnizacionMonto = 0;
-        if (data.motivoRetiroValue !== 'renuncia_sin_preaviso' && data.motivoRetiroValue !== 'despido_justificado') {
+        if (data.motivoRetiroValue === 'despido_injustificado') {
             let diasIndemnizacion = 0;
-            if (tiempoTotalServicio.years < 3) { diasIndemnizacion = (tiempoTotalServicio.years * 30) + (tiempoTotalServicio.months * (30 / 12)) + (tiempoTotalServicio.days * (30 / 12 / 30)); } 
-            else { diasIndemnizacion = (3 * 30) + ((tiempoTotalServicio.years - 3) * 20) + (tiempoTotalServicio.months * (20 / 12)) + (tiempoTotalServicio.days * (20 / 12 / 30)); }
+            if (tiempoTotalServicio.years < 3) { 
+                diasIndemnizacion = (tiempoTotalServicio.years * 30) + (tiempoTotalServicio.months * 2.5) + (tiempoTotalServicio.days / 30 * 2.5);
+            } else { 
+                diasIndemnizacion = (3 * 30) + ((tiempoTotalServicio.years - 3) * 20) + (tiempoTotalServicio.months * (20 / 12)) + (tiempoTotalServicio.days * (20 / 12 / 30));
+            }
             indemnizacionMonto = Math.min(150, diasIndemnizacion) * salarioDiario;
         }
 
@@ -90,19 +105,51 @@ document.addEventListener('DOMContentLoaded', function() {
         const f = (n) => n.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const formatDate = (d) => d ? d.toLocaleDateString('es-NI', { day: 'numeric', month: 'numeric', year: 'numeric' }) : '';
         
-        // VISUALIZACIÓN EN EL MODAL (tu mismo HTML, sin cambios)
+        // Guardar datos para el PDF
+        window.datosLiquidacion = {
+            nombreEmpresa: data.nombreEmpresa,
+            fechaElaboracion: data.fechaElaboracion,
+            fechaIngreso: data.fechaIngreso,
+            fechaSalida: data.fechaSalida,
+            nombreEmpleado: data.nombreEmpleado,
+            cedula: data.cedula,
+            motivoRetiro: data.motivoRetiro,
+            puesto: data.puesto,
+            salarioMensual: data.salarioMensual,
+            salarioDiario: salarioDiario,
+            sueldoPendienteMonto: sueldoPendienteMonto,
+            aguinaldoProporcional: aguinaldoProporcional,
+            vacacionesMonto: vacacionesMonto,
+            indemnizacionMonto: indemnizacionMonto,
+            otrosIngresos: data.otrosIngresos,
+            deduccionINSS: deduccionINSS,
+            deduccionInventario: data.deduccionInventario,
+            otrasDeducciones: data.otrasDeducciones,
+            totalIngresosBrutos: totalIngresosBrutos,
+            totalDeducciones: totalDeducciones,
+            netoAPagar: netoAPagar,
+            cantidadEnLetras: cantidadEnLetras,
+            elaboradoPor: data.elaboradoPor,
+            revisadoPor: data.revisadoPor,
+            autorizadoPor: data.autorizadoPor,
+            formatDate: formatDate,
+            f: f
+        };
+        
+        // VISUALIZACIÓN EN EL MODAL
         pdfContent.innerHTML = `
             <div class="pdf-header"><h2>${data.nombreEmpresa}</h2><p>LIQUIDACION FINAL EN C$</p></div>
-            <table class="info-table"><tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr>
-            <tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatDate(data.fechaIngreso)}</td></tr>
-            <tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatDate(data.fechaSalida)}</td></tr>
-            <tr><td class="label">NOMBRE DEL EMPLEADO</td><td class="value">${data.nombreEmpleado}</td></tr>
-            <tr><td class="label">CEDULA DE IDENTIDAD</td><td class="value">${data.cedula}</td></tr>
-            <tr><td class="label">MOTIVO DE RETIRO</td><td class="value">${data.motivoRetiro}</td></tr>
-            <tr><td class="label">TIPO DE CONTRATO</td><td class="value">${data.tipoContrato}</td></tr>
-            <tr><td class="label">TIPO DE SALARIO</td><td class="value">${data.tipoSalario}</td></tr>
-            <tr><td class="label">PUESTO (CARGO DESEMPEÑADO)</td><td class="value">${data.puesto}</td></tr>
-            <tr><td class="label">SALARIO ORDINARIO MENSUAL</td><td class="value">${f(data.salarioMensual)}<span class="sub-value">SUELDO DIARIO ${salarioDiario.toFixed(5)}</span><span class="sub-value">SUELDO POR HORA ${(salarioDiario / 8).toFixed(4)}</span></td></tr>
+            <table class="info-table">
+                <tr><td class="label">FECHA DE ELABORACION DE LA LIQUIDACIÓN</td><td class="value">${formatDate(data.fechaElaboracion)}</td></tr>
+                <tr><td class="label">FECHA DE INGRESO</td><td class="value">${formatDate(data.fechaIngreso)}</td></tr>
+                <tr><td class="label">FECHA DE SALIDA</td><td class="value">${formatDate(data.fechaSalida)}</td></tr>
+                <tr><td class="label">NOMBRE DEL EMPLEADO</td><td class="value">${data.nombreEmpleado}</td></tr>
+                <tr><td class="label">CEDULA DE IDENTIDAD</td><td class="value">${data.cedula}</td></tr>
+                <tr><td class="label">MOTIVO DE RETIRO</td><td class="value">${data.motivoRetiro}</td></tr>
+                <tr><td class="label">TIPO DE CONTRATO</td><td class="value">${data.tipoContrato}</td></tr>
+                <tr><td class="label">TIPO DE SALARIO</td><td class="value">${data.tipoSalario}</td></tr>
+                <tr><td class="label">PUESTO (CARGO DESEMPEÑADO)</td><td class="value">${data.puesto}</td></tr>
+                <tr><td class="label">SALARIO ORDINARIO MENSUAL</td><td class="value">${f(data.salarioMensual)}<span class="sub-value">SUELDO DIARIO ${salarioDiario.toFixed(5)}</span><span class="sub-value">SUELDO POR HORA ${(salarioDiario / 8).toFixed(4)}</span></td></tr>
             </table>
             <b>INGRESOS</b><hr>
             <table class="prestaciones-table">
@@ -128,8 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.style.display = 'block';
     }
     
-    // FUNCIÓN QUE GENERA PDF CAPTURANDO EL HTML EXACTO DEL MODAL
-    // Respeta 100% tu CSS y formato visual
+    // Función que genera PDF capturando el HTML exacto del modal
     async function generarPDFConJsPDF() {
         if (window.generandoPDF) return;
         window.generandoPDF = true;
@@ -140,12 +186,10 @@ document.addEventListener('DOMContentLoaded', function() {
         btnPDF.disabled = true;
         
         try {
-            // Obtener el elemento que contiene el HTML de la liquidación
             const elemento = document.getElementById('pdf-content');
             
-            // Configuración profesional para html2canvas
             const canvas = await html2canvas(elemento, {
-                scale: 2.5,                    // Alta calidad
+                scale: 2.5,
                 backgroundColor: '#ffffff',
                 logging: false,
                 useCORS: true,
@@ -161,7 +205,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 format: 'a4'
             });
             
-            // Márgenes profesionales
             const marginLeft = 10;
             const marginRight = 10;
             const marginTop = 10;
@@ -169,26 +212,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const pageWidth = 210;
             const availableWidth = pageWidth - marginLeft - marginRight;
             
-            // Calcular dimensiones manteniendo proporción
             const imgWidth = availableWidth;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
             const pageHeight = 297;
             const availableHeight = pageHeight - marginTop - 10;
             
-            // Convertir canvas a imagen
             const imgData = canvas.toDataURL('image/png', 1.0);
             
-            // Verificar si necesita múltiples páginas
             let heightLeft = imgHeight;
             let position = 0;
             let pageNum = 1;
             
-            // Agregar primera página
             pdf.addImage(imgData, 'PNG', marginLeft, marginTop - position, imgWidth, imgHeight);
             heightLeft -= availableHeight;
             position += availableHeight;
             
-            // Agregar páginas adicionales si es necesario
             while (heightLeft > 5) {
                 pdf.addPage();
                 pdf.addImage(imgData, 'PNG', marginLeft, marginTop - position, imgWidth, imgHeight);
@@ -197,7 +235,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 pageNum++;
             }
             
-            // Agregar numeración de páginas
             for (let i = 1; i <= pageNum; i++) {
                 pdf.setPage(i);
                 pdf.setFontSize(7);
@@ -205,7 +242,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 pdf.text(`Página ${i} de ${pageNum}`, pageWidth / 2, 290, { align: 'center' });
             }
             
-            // Guardar PDF
             const fecha = new Date();
             const nombreArchivo = `Liquidacion_${fecha.getFullYear()}-${(fecha.getMonth()+1).toString().padStart(2,'0')}-${fecha.getDate().toString().padStart(2,'0')}.pdf`;
             pdf.save(nombreArchivo);
@@ -213,7 +249,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error al generar PDF:', error);
             alert('Error al generar el PDF. Se abrirá la ventana de impresión.');
-            // Fallback: ventana de impresión
             const htmlContent = document.getElementById('pdf-content').innerHTML;
             const estilos = document.querySelector('link[href="style.css"]')?.outerHTML || '';
             const ventana = window.open('', '_blank');
@@ -228,16 +263,124 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function sifecha(fechaInicio, fechaFin) {
+    function calcularTiempoServicio(fechaInicio, fechaFin) {
         if (!fechaInicio || !fechaFin) return { years: 0, months: 0, days: 0 };
-        let inicio = new Date(fechaInicio.getTime()); let fin = new Date(fechaFin.getTime());
-        let anios = fin.getFullYear() - inicio.getFullYear(); let meses = fin.getMonth() - inicio.getMonth(); let dias = fin.getDate() - inicio.getDate();
+        let inicio = new Date(fechaInicio.getTime());
+        let fin = new Date(fechaFin.getTime());
+        let anios = fin.getFullYear() - inicio.getFullYear();
+        let meses = fin.getMonth() - inicio.getMonth();
+        let dias = fin.getDate() - inicio.getDate();
         if (dias < 0) { meses--; dias += new Date(fin.getFullYear(), fin.getMonth(), 0).getDate(); }
         if (meses < 0) { anios--; meses += 12; }
         return { years: anios, months: meses, days: dias };
     }
     
     function numeroALetras(num) {
-        var Unidades=function(num){switch(num){case 1:return"UN";case 2:return"DOS";case 3:return"TRES";case 4:return"CUATRO";case 5:return"CINCO";case 6:return"SEIS";case 7:return"SIETE";case 8:return"OCHO";case 9:return"NUEVE"}return""};var Decenas=function(num){let a=Math.floor(num/10),r=num-10*a;switch(a){case 1:switch(r){case 0:return"DIEZ";case 1:return"ONCE";case 2:return"DOCE";case 3:return"TRECE";case 4:return"CATORCE";case 5:return"QUINCE";default:return"DIECI"+Unidades(r)}case 2:switch(r){case 0:return"VEINTE";default:return"VEINTI"+Unidades(r)}case 3:return DecenasY("TREINTA",r);case 4:return DecenasY("CUARENTA",r);case 5:return DecenasY("CINCUENTA",r);case 6:return DecenasY("SESENTA",r);case 7:return DecenasY("SETENTA",r);case 8:return DecenasY("OCHENTA",r);case 9:return DecenasY("NOVENTA",r);case 0:return Unidades(r)}};function DecenasY(e,r){return r>0?e+" Y "+Unidades(r):e}function Centenas(e){let r=Math.floor(e/100),t=e-100*r;switch(r){case 1:return t>0?"CIENTO "+Decenas(t):"CIEN";case 2:return"DOSCIENTOS "+Decenas(t);case 3:return"TRESCIENTOS "+Decenas(t);case 4:return"CUATROCIENTOS "+Decenas(t);case 5:return"QUINIENTOS "+Decenas(t);case 6:return"SEISCIENTOS "+Decenas(t);case 7:return"SETECIENTOS "+Decenas(t);case 8:return"OCHOCIENTOS "+Decenas(t);case 9:return"NOVECIENTOS "+Decenas(t)}return Decenas(t)}function Seccion(e,r,t,n){let a=Math.floor(e/r),o=e-a*r,s="";return a>0&&(s=a>1?Centenas(a)+" "+n:t),o>0&&(s+=""),s}function Miles(e){let r=1e3,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MIL","MIL"),o=Centenas(n);return""==a?o:a+" "+o}function Millones(e){let r=1e6,t=Math.floor(e/r),n=e-t*r,a=Seccion(e,r,"UN MILLON DE","MILLONES DE"),o=Miles(n);return""==a?o:a+" "+o}let currency={plural:"CÓRDOBAS",singular:"CÓRDOBA"},data={numero:num,enteros:Math.floor(num),centavos:Math.round(100*num)-100*Math.floor(num),letrasCentavos:"",letrasMonedaPlural:currency.plural,letrasMonedaSingular:currency.singular};return data.centavos>0&&(data.letrasCentavos="CON "+data.centavos.toString().padStart(2,"0")+"/100"),0==data.enteros?"CERO "+data.letrasMonedaPlural+" "+data.letrasCentavos:1==data.enteros?Millones(data.ent eros)+" "+data.letrasMonedaSingular+" "+data.letrasCentavos:Millones(data.enteros)+" "+data.letrasMonedaPlural+" "+data.letrasCentavos
+        var Unidades = function(num) {
+            switch(num) {
+                case 1: return "UN";
+                case 2: return "DOS";
+                case 3: return "TRES";
+                case 4: return "CUATRO";
+                case 5: return "CINCO";
+                case 6: return "SEIS";
+                case 7: return "SIETE";
+                case 8: return "OCHO";
+                case 9: return "NUEVE";
+                default: return "";
+            }
+        };
+        
+        var Decenas = function(num) {
+            let a = Math.floor(num / 10);
+            let r = num - (10 * a);
+            switch(a) {
+                case 1:
+                    switch(r) {
+                        case 0: return "DIEZ";
+                        case 1: return "ONCE";
+                        case 2: return "DOCE";
+                        case 3: return "TRECE";
+                        case 4: return "CATORCE";
+                        case 5: return "QUINCE";
+                        default: return "DIECI" + Unidades(r);
+                    }
+                case 2:
+                    switch(r) {
+                        case 0: return "VEINTE";
+                        default: return "VEINTI" + Unidades(r);
+                    }
+                case 3: return (r > 0) ? "TREINTA Y " + Unidades(r) : "TREINTA";
+                case 4: return (r > 0) ? "CUARENTA Y " + Unidades(r) : "CUARENTA";
+                case 5: return (r > 0) ? "CINCUENTA Y " + Unidades(r) : "CINCUENTA";
+                case 6: return (r > 0) ? "SESENTA Y " + Unidades(r) : "SESENTA";
+                case 7: return (r > 0) ? "SETENTA Y " + Unidades(r) : "SETENTA";
+                case 8: return (r > 0) ? "OCHENTA Y " + Unidades(r) : "OCHENTA";
+                case 9: return (r > 0) ? "NOVENTA Y " + Unidades(r) : "NOVENTA";
+                default: return Unidades(r);
+            }
+        };
+        
+        function DecenasY(strNum, r) {
+            return r > 0 ? strNum + " Y " + Unidades(r) : strNum;
+        }
+        
+        function Centenas(num) {
+            let r = Math.floor(num / 100);
+            let t = num - (100 * r);
+            switch(r) {
+                case 1: return t > 0 ? "CIENTO " + Decenas(t) : "CIEN";
+                case 2: return "DOSCIENTOS " + Decenas(t);
+                case 3: return "TRESCIENTOS " + Decenas(t);
+                case 4: return "CUATROCIENTOS " + Decenas(t);
+                case 5: return "QUINIENTOS " + Decenas(t);
+                case 6: return "SEISCIENTOS " + Decenas(t);
+                case 7: return "SETECIENTOS " + Decenas(t);
+                case 8: return "OCHOCIENTOS " + Decenas(t);
+                case 9: return "NOVECIENTOS " + Decenas(t);
+                default: return Decenas(t);
+            }
+        }
+        
+        function Seccion(num, divisor, strSingular, strPlural) {
+            let a = Math.floor(num / divisor);
+            let o = num - (a * divisor);
+            let result = "";
+            if (a > 0) {
+                result = a > 1 ? Centenas(a) + " " + strPlural : strSingular;
+            }
+            return result;
+        }
+        
+        function Miles(num) {
+            let divisor = 1000;
+            let a = Math.floor(num / divisor);
+            let n = num - (a * divisor);
+            let str = Seccion(num, divisor, "UN MIL", "MIL");
+            let centenas = Centenas(n);
+            return str === "" ? centenas : str + " " + centenas;
+        }
+        
+        function Millones(num) {
+            let divisor = 1000000;
+            let a = Math.floor(num / divisor);
+            let n = num - (a * divisor);
+            let str = Seccion(num, divisor, "UN MILLON DE", "MILLONES DE");
+            let miles = Miles(n);
+            return str === "" ? miles : str + " " + miles;
+        }
+        
+        let currency = { plural: "CÓRDOBAS", singular: "CÓRDOBA" };
+        let enteros = Math.floor(num);
+        let centavos = Math.round((num * 100)) - (enteros * 100);
+        let letrasCentavos = centavos > 0 ? "CON " + centavos.toString().padStart(2, "0") + "/100" : "";
+        
+        if (enteros === 0) {
+            return "CERO " + currency.plural + " " + letrasCentavos;
+        }
+        if (enteros === 1) {
+            return Millones(enteros) + " " + currency.singular + " " + letrasCentavos;
+        }
+        return Millones(enteros) + " " + currency.plural + " " + letrasCentavos;
     }
 });
