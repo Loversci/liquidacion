@@ -43,7 +43,6 @@ document.addEventListener('DOMContentLoaded', function() {
             autorizadoPor: document.getElementById('autorizadoPor').value.toUpperCase(),
         };
         
-        // Validación inicial
         if (data.fechaSalida < data.fechaIngreso) { alert('La fecha de salida no puede ser anterior a la fecha de ingreso.'); return; }
 
         // --- Cálculos de Ingresos y Prestaciones ---
@@ -58,7 +57,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const tiempoTotalServicio = sifecha(data.fechaIngreso, data.fechaSalida);
         
-        // Cálculo de Aguinaldo (Art. 93 CT)
         let fechaInicioAguinaldo;
         const primeroDiciembreAnterior = new Date(data.fechaSalida.getFullYear(), 11, 1);
         if (data.fechaSalida.getMonth() < 11) { primeroDiciembreAnterior.setFullYear(data.fechaSalida.getFullYear() - 1); }
@@ -68,7 +66,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const mesesParaAguinaldo = tiempoAguinaldo.years * 12 + tiempoAguinaldo.months + (tiempoAguinaldo.days / 30);
         const aguinaldoProporcional = (data.salarioMensual / 12) * mesesParaAguinaldo;
         
-        // Cálculo de Vacaciones (Art. 78 CT)
         const totalMesesTrabajados = tiempoTotalServicio.years * 12 + tiempoTotalServicio.months + (tiempoTotalServicio.days / 30);
         const diasVacacionesGanadas = totalMesesTrabajados * 2.5;
         const diasVacacionesGozadas = Math.max(0, diasVacacionesGanadas - data.vacacionesPendientes);
@@ -88,47 +85,47 @@ document.addEventListener('DOMContentLoaded', function() {
             indemnizacionMonto = Math.min(150, diasIndemnizacion) * salarioDiario;
         }
 
-        // Total de ingresos brutos
         const totalIngresosBrutos = sueldoPendienteMonto + aguinaldoProporcional + vacacionesMonto + indemnizacionMonto + data.otrosIngresos;
         
-        // Cálculo de Deducciones
         const baseCalculoDeducciones = sueldoPendienteMonto + vacacionesMonto + data.otrosIngresos;
         let deduccionINSS = data.aplicarINSS ? baseCalculoDeducciones * 0.07 : 0;
         let deduccionIR = 0;
         const totalDeducciones = deduccionINSS + deduccionIR + data.deduccionInventario + data.otrasDeducciones;
         
-        // Neto a pagar
         const netoAPagar = totalIngresosBrutos - totalDeducciones;
         const cantidadEnLetras = numeroALetras(netoAPagar);
         const f = (n) => n.toLocaleString('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const formatDate = (d) => d ? d.toLocaleDateString('es-NI', { day: 'numeric', month: 'numeric', year: 'numeric' }) : '';
         
         // === FUNCIONES DE FORMATO MEJORADAS ===
-        // Formato para montos: muestra "N/A" si es 0
         const formatMonto = (valor) => {
             if (valor === 0 || valor === null || valor === undefined) return "N/A";
             return `C$ ${f(valor)}`;
         };
         
-        // Formato para días: muestra "N/A" si es 0
         const formatDias = (dias) => {
             if (dias === 0 || dias === null || dias === undefined) return "N/A";
             return dias;
         };
         
-        // Formato para fechas: muestra "N/A" si no hay fecha
         const formatFechaProfesional = (fecha) => {
             if (!fecha) return "N/A";
             return formatDate(fecha);
         };
         
-        // Generar HTML del sueldo pendiente (con validación)
+        // === GENERACIÓN DE FILAS DE TABLA CON ESTRUCTURA CORRECTA ===
+        
+        // Fila de Sueldo Pendiente
         const sueldoPendienteHTML = (() => {
             if (data.sueldoPendienteDias === 0 || sueldoPendienteMonto === 0) {
                 return `
                     <tr>
                         <td class="concepto">SUELDO PENDIENTE DE PAGO</td>
-                        <td colspan="5">No aplica (sin días pendientes)</td>
+                        <td>DEL</td>
+                        <td>${formatFechaProfesional(data.fechaInicioSueldoPendiente)}</td>
+                        <td>AL DÍA</td>
+                        <td>${formatFechaProfesional(fechaFinSueldoPendiente)}</td>
+                        <td>${formatDias(data.sueldoPendienteDias)}</td>
                         <td class="monto">N/A</td>
                     </tr>
                 `;
@@ -146,13 +143,37 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         })();
         
-        // Generar HTML de vacaciones (con validación)
+        // Fila de Aguinaldo (siempre visible, con estructura completa)
+        const aguinaldoHTML = `
+            <tr>
+                <td class="concepto">AGUINALDO<br>(Art. 93 CT)</td>
+                <td>${formatFechaProfesional(fechaInicioAguinaldo)}</td>
+                <td>${formatFechaProfesional(data.fechaSalida)}</td>
+                <td>${formatDias(tiempoAguinaldo.days)}</td>
+                <td>${tiempoAguinaldo.months}</td>
+                <td>${tiempoAguinaldo.years}</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td class="monto">${formatMonto(aguinaldoProporcional)}</td>
+            </tr>
+        `;
+        
+        // Fila de Vacaciones (CORREGIDA - mantiene 10 columnas)
         const vacacionesHTML = (() => {
+            // Siempre mostrar las 10 columnas, pero con valores adecuados
             if (data.vacacionesPendientes === 0 || vacacionesMonto === 0) {
                 return `
                     <tr>
                         <td class="concepto">VACACIONES<br>(Art. 78 CT)</td>
-                        <td colspan="7">No aplica (sin días pendientes)</td>
+                        <td>${formatFechaProfesional(data.fechaIngreso)}</td>
+                        <td>${formatFechaProfesional(data.fechaSalida)}</td>
+                        <td>${formatDias(tiempoTotalServicio.days)}</td>
+                        <td>${tiempoTotalServicio.months}</td>
+                        <td>${tiempoTotalServicio.years}</td>
+                        <td>${diasVacacionesGanadas.toFixed(2)}</td>
+                        <td>${diasVacacionesGozadas.toFixed(2)}</td>
+                        <td>0.00</td>
                         <td class="monto">N/A</td>
                     </tr>
                 `;
@@ -173,21 +194,23 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         })();
         
-        // Generar HTML de indemnización (con validación)
+        // Fila de Indemnización (CORREGIDA - mantiene estructura de 10 columnas)
         const indemnizacionHTML = (() => {
             if (indemnizacionMonto === 0) {
                 let motivoTexto = "";
                 if (data.motivoRetiroValue === 'renuncia_sin_preaviso') {
-                    motivoTexto = "Renuncia inmediata/abandono - No aplica según Art. 45 CT";
+                    motivoTexto = "Renuncia inmediata/abandono";
                 } else if (data.motivoRetiroValue === 'despido_justificado') {
-                    motivoTexto = "Despido con causa justa - No aplica según Art. 45 CT";
+                    motivoTexto = "Despido con causa justa";
                 } else {
-                    motivoTexto = "No aplica (tiempo de servicio insuficiente o motivo no califica)";
+                    motivoTexto = "No aplica";
                 }
+                // Para mantener la estructura de 10 columnas, usamos colspan en la primera celda
+                // y dejamos las demás columnas vacías o con guiones
                 return `
                     <tr>
                         <td class="concepto">INDEM.ANT.<br>(Art. 45 CT)</td>
-                        <td colspan="7">${motivoTexto}</td>
+                        <td colspan="8">${motivoTexto} - No aplica según Art. 45 CT</td>
                         <td class="monto">N/A</td>
                     </tr>
                 `;
@@ -196,13 +219,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     <td class="concepto">INDEM.ANT.<br>(Art. 45 CT)</td>
                     <td colspan="5">Tiempo de Servicio</td>
-                    <td colspan="3"></td>
+                    <td colspan="3">-</td>
                     <td class="monto">${formatMonto(indemnizacionMonto)}</td>
                 </tr>
             `;
         })();
         
-        // Generar HTML de deducciones (con validación)
+        // Generar HTML de deducciones
         const deduccionesHTML = (() => {
             let html = '';
             if (deduccionINSS > 0) {
@@ -220,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return html;
         })();
         
-        // === GENERACIÓN DEL HTML DEL MODAL (formato mejorado) ===
+        // === GENERACIÓN DEL HTML DEL MODAL ===
         pdfContent.innerHTML = `
             <div class="pdf-header"><h2>${data.nombreEmpresa}</h2><p>LIQUIDACION FINAL EN C$</p></div>
             <table class="info-table">
@@ -239,11 +262,11 @@ document.addEventListener('DOMContentLoaded', function() {
             <b>INGRESOS</b><hr>
             <table class="prestaciones-table">
                 ${sueldoPendienteHTML}
-                ${data.otrosIngresos > 0 ? `<tr><td class="concepto">Viaticos de Transporte, Alimentación y Hospedaje</td><td colspan="5"></td><td class="monto">${formatMonto(data.otrosIngresos)}</td></tr>` : ''}
+                ${data.otrosIngresos > 0 ? `<tr><td class="concepto">Viaticos de Transporte, Alimentación y Hospedaje</td><td colspan="5">-</td><td class="monto">${formatMonto(data.otrosIngresos)}</td></tr>` : ''}
             </table>
             <b>PRESTACIONES SOCIALES</b>
-            <table class="prestaciones-table"><thead><tr><th class="concepto">CONCEPTO</th><th>DEL</th><th>AL</th><th>DIAS</th><th>MESES</th><th>AÑOS</th><th>DIAS A FAVOR<div class="sub-header">(2.5 POR MES)</div></th><th>Deduccion de<br>vacaciones<br>descansadas</th><th>DIAS DE<br>VACACIONES<br>A PAGAR</th><th class="monto">MONTO EN C$</th></tr></thead><tbody>
-                <tr><td class="concepto">AGUINALDO<br>(Art. 93 CT)</td><td>${formatFechaProfesional(fechaInicioAguinaldo)}</td><td>${formatFechaProfesional(data.fechaSalida)}</td><td>${formatDias(tiempoAguinaldo.days)}</td><td>${tiempoAguinaldo.months}</td><td>${tiempoAguinaldo.years}</td><td colspan="3"></td><td class="monto">${formatMonto(aguinaldoProporcional)}</td></tr>
+            <table class="prestaciones-table"><thead><tr><th class="concepto">CONCEPTO</th><th>DEL</th><th>AL</th><th>DIAS</th><th>MESES</th><th>AÑOS</th><th>DIAS A FAVOR<div class="sub-header">(2.5 POR MES)</div></th><th>Deduccion de<br>vacaciones<br>descansadas</th><th>DIAS DE<br>VACACIONES<br>A PAGAR</th><th class="monto">MONTO EN C$</th><tr></thead><tbody>
+                ${aguinaldoHTML}
                 ${vacacionesHTML}
                 ${indemnizacionHTML}
             </tbody></table>
@@ -255,7 +278,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <table class="letras-table"><tr><td class="label">CANTIDAD EN LETRAS</td><td class="value">${cantidadEnLetras}</td></tr></table>
             <p class="texto-finiquito">Por este medio de la presente hago constar que recibo de <strong>${data.nombreEmpresa}</strong>, mi liquidación a mi entera satisfacción final, a la que tengo derecho según nuestras leyes. Eximiendo al señor EMPLEADOR de cualquier reclamo posterior. Finiquitando de esta manera el vínculo laboral. Sin más a que hacer referencia, firmo la presente liquidación.</p>
             <table class="firmas-table"><tr><td><div class="firma-block"><div class="label">ELABORADO POR:</div><div class="name">${data.elaboradoPor || '___________________'}</div></div></td><td><div class="firma-block"><div class="label">REVISADO POR:</div><div class="name">${data.revisadoPor || '___________________'}</div></div></td></tr>
-            <tr><td><div class="firma-block"><div class="label">RECIBI CONFORME:</div><div class="name">${data.nombreEmpleado}<br>${data.cedula}</div></div></td><td><div class="firma-block"><div class="label">AUTORIZADO POR:</div><div class="name">${data.autorizadoPor || '___________________'}</div></div></td></tr></table>
+            <tr><td><div class="firma-block"><div class="label">RECIBI CONFORME:</div><div class="name">${data.nombreEmpleado}<br>${data.cedula}</div></div></td><td><div class="firma-block"><div class="label">AUTORIZADO POR:</div><div class="name">${data.autorizadoPor || '___________________'}</div></div></td></tr>
+            </table>
         `;
         modal.style.display = 'block';
     }
